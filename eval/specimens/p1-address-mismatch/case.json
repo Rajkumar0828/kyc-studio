@@ -1,0 +1,33 @@
+{
+  "case_id": "p1-address-mismatch",
+  "synthetic": true,
+  "seed": 20261101,
+  "as_of": "2026-11-01",
+  "policy_id": "housing-loan",
+  "person": "p1",
+  "defects": [
+    "address-mismatch"
+  ],
+  "documents": [
+    {
+      "file": "id.png",
+      "truth": "id.truth.json",
+      "document_type": "national_id"
+    },
+    {
+      "file": "bill.png",
+      "truth": "bill.truth.json",
+      "document_type": "utility_bill"
+    }
+  ],
+  "selfie": "selfie.png",
+  "expected": {
+    "decision": "manual_review",
+    "flag_categories": [
+      "integrity"
+    ],
+    "flag_codes": [
+      "address_mismatch"
+    ]
+  }
+}

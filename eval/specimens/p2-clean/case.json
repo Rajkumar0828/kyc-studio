@@ -1,0 +1,27 @@
+{
+  "case_id": "p2-clean",
+  "synthetic": true,
+  "seed": 20261101,
+  "as_of": "2026-11-01",
+  "policy_id": "housing-loan",
+  "person": "p2",
+  "defects": [],
+  "documents": [
+    {
+      "file": "id.png",
+      "truth": "id.truth.json",
+      "document_type": "national_id"
+    },
+    {
+      "file": "bill.png",
+      "truth": "bill.truth.json",
+      "document_type": "utility_bill"
+    }
+  ],
+  "selfie": "selfie.png",
+  "expected": {
+    "decision": "auto_approve",
+    "flag_categories": [],
+    "flag_codes": []
+  }
+}

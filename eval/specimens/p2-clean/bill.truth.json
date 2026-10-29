@@ -1,0 +1,81 @@
+{
+  "case_id": "p2-clean",
+  "file": "bill.png",
+  "document_type": "utility_bill",
+  "issuer": "Quillmere Water & Power (fictional)",
+  "synthetic": true,
+  "image": {
+    "width": 1240,
+    "height": 1754
+  },
+  "box_format": "[x_min, y_min, x_max, y_max] on a 0-1000 grid, origin top-left",
+  "defects": [],
+  "fields": {
+    "full_name": {
+      "found": true,
+      "value": "Tobias Wrenfield",
+      "normalized": "Tobias Wrenfield",
+      "box": [
+        64,
+        161,
+        249,
+        185
+      ]
+    },
+    "date_of_birth": {
+      "found": false,
+      "value": "",
+      "normalized": "",
+      "box": [
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    "document_number": {
+      "found": true,
+      "value": "QW-88218-60939",
+      "normalized": "QW-88218-60939",
+      "box": [
+        756,
+        159,
+        910,
+        178
+      ]
+    },
+    "issue_date": {
+      "found": true,
+      "value": "27 September 2026",
+      "normalized": "2026-09-27",
+      "box": [
+        738,
+        187,
+        910,
+        206
+      ]
+    },
+    "expiry_date": {
+      "found": false,
+      "value": "",
+      "normalized": "",
+      "box": [
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    "address": {
+      "found": true,
+      "value": "7 Brindlewick Lane, Hollowmere 31862",
+      "normalized": "7 Brindlewick Lane, Hollowmere 31862",
+      "box": [
+        64,
+        187,
+        475,
+        211
+      ]
+    }
+  }
+}

@@ -1,0 +1,49 @@
+{
+  "seed": 20261101,
+  "cases": [
+    {
+      "case_id": "p1-clean",
+      "as_of": "2026-11-01",
+      "defects": [],
+      "expected_decision": "auto_approve"
+    },
+    {
+      "case_id": "p2-clean",
+      "as_of": "2026-11-01",
+      "defects": [],
+      "expected_decision": "auto_approve"
+    },
+    {
+      "case_id": "p1-expired",
+      "as_of": "2026-11-01",
+      "defects": [
+        "expired"
+      ],
+      "expected_decision": "request_info"
+    },
+    {
+      "case_id": "p2-name-mismatch",
+      "as_of": "2026-11-01",
+      "defects": [
+        "name-mismatch"
+      ],
+      "expected_decision": "manual_review"
+    },
+    {
+      "case_id": "p1-address-mismatch",
+      "as_of": "2026-11-01",
+      "defects": [
+        "address-mismatch"
+      ],
+      "expected_decision": "manual_review"
+    },
+    {
+      "case_id": "p2-blurry",
+      "as_of": "2026-11-01",
+      "defects": [
+        "blurry"
+      ],
+      "expected_decision": "request_info"
+    }
+  ]
+}

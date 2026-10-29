@@ -1,0 +1,81 @@
+{
+  "case_id": "p1-clean",
+  "file": "bill.png",
+  "document_type": "utility_bill",
+  "issuer": "Quillmere Water & Power (fictional)",
+  "synthetic": true,
+  "image": {
+    "width": 1240,
+    "height": 1754
+  },
+  "box_format": "[x_min, y_min, x_max, y_max] on a 0-1000 grid, origin top-left",
+  "defects": [],
+  "fields": {
+    "full_name": {
+      "found": true,
+      "value": "Elin Thornquist",
+      "normalized": "Elin Thornquist",
+      "box": [
+        64,
+        161,
+        230,
+        185
+      ]
+    },
+    "date_of_birth": {
+      "found": false,
+      "value": "",
+      "normalized": "",
+      "box": [
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    "document_number": {
+      "found": true,
+      "value": "QW-80988-26579",
+      "normalized": "QW-80988-26579",
+      "box": [
+        753,
+        159,
+        910,
+        178
+      ]
+    },
+    "issue_date": {
+      "found": true,
+      "value": "24 September 2026",
+      "normalized": "2026-09-24",
+      "box": [
+        738,
+        187,
+        910,
+        206
+      ]
+    },
+    "expiry_date": {
+      "found": false,
+      "value": "",
+      "normalized": "",
+      "box": [
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    "address": {
+      "found": true,
+      "value": "14 Quillfeather Row, Ambermoor 20417",
+      "normalized": "14 Quillfeather Row, Ambermoor 20417",
+      "box": [
+        64,
+        187,
+        416,
+        237
+      ]
+    }
+  }
+}

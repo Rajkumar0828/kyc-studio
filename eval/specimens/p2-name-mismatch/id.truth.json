@@ -1,0 +1,81 @@
+{
+  "case_id": "p2-name-mismatch",
+  "file": "id.png",
+  "document_type": "national_id",
+  "issuer": "Republic of Veridia (fictional)",
+  "synthetic": true,
+  "image": {
+    "width": 1712,
+    "height": 1080
+  },
+  "box_format": "[x_min, y_min, x_max, y_max] on a 0-1000 grid, origin top-left",
+  "defects": [],
+  "fields": {
+    "full_name": {
+      "found": true,
+      "value": "TOBIAS WRENFIELD",
+      "normalized": "Tobias Wrenfield",
+      "box": [
+        332,
+        260,
+        566,
+        314
+      ]
+    },
+    "date_of_birth": {
+      "found": true,
+      "value": "02 NOV 1979",
+      "normalized": "1979-11-02",
+      "box": [
+        332,
+        378,
+        485,
+        433
+      ]
+    },
+    "document_number": {
+      "found": true,
+      "value": "VD8R3N6W1H",
+      "normalized": "VD8R3N6W1H",
+      "box": [
+        660,
+        378,
+        808,
+        426
+      ]
+    },
+    "issue_date": {
+      "found": true,
+      "value": "01 SEP 2022",
+      "normalized": "2022-09-01",
+      "box": [
+        332,
+        497,
+        472,
+        551
+      ]
+    },
+    "expiry_date": {
+      "found": true,
+      "value": "31 AUG 2032",
+      "normalized": "2032-08-31",
+      "box": [
+        660,
+        497,
+        810,
+        551
+      ]
+    },
+    "address": {
+      "found": true,
+      "value": "7 Brindlewick Lane, Hollowmere 31862",
+      "normalized": "7 Brindlewick Lane, Hollowmere 31862",
+      "box": [
+        332,
+        615,
+        780,
+        670
+      ]
+    }
+  }
+}
