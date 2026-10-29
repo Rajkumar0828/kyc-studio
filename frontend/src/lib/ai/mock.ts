@@ -1,5 +1,4 @@
 import type { DocType } from "../policy/schema";
-import { DEFAULT_POLICIES } from "../policy/defaults";
 import type { AiProvider, Extraction, Field, FieldName, InputFile } from "./types";
 
 // Deterministic stand-in for the model. Filename hints drive the scenario so
@@ -7,6 +6,7 @@ import type { AiProvider, Extraction, Field, FieldName, InputFile } from "./type
 //   passport / license / national_id / utility / statement -> document type
 //   "expired" -> past expiry, "mismatch" -> different name, "minor" -> under 18,
 //   "unknownperson" -> not in the mock registry, "blurry" -> low confidence
+// Without a filename hint, the upload slot's declared type is used.
 const f = (value: string, confidence = 0.96, box: Field["box"] = [100, 100, 600, 160]): Field =>
   ({ found: value !== "", value, confidence, box: value ? box : [0, 0, 0, 0] });
 
@@ -27,6 +27,7 @@ export const mockProvider: AiProvider = {
 
   async classifyDocument(file) {
     const docType = typeFromName(file.filename);
+    if (docType === "unknown" && file.declaredType) return { docType: file.declaredType, confidence: 0.8 };
     return { docType, confidence: docType === "unknown" ? 0.3 : 0.97 };
   },
 
@@ -64,9 +65,5 @@ export const mockProvider: AiProvider = {
 
   async customerGuidance(issues) {
     return issues.length ? `We need a little more from you: ${issues.join(" ")}` : "Thanks, everything we need has been received.";
-  },
-
-  async compilePolicy() {
-    return DEFAULT_POLICIES[0];
   },
 };

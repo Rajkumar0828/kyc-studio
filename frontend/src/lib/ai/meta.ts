@@ -73,19 +73,4 @@ export const metaProvider: AiProvider = {
     (await jsonCall("guidance", { type: "object", properties: { message: { type: "string" } }, required: ["message"], additionalProperties: false },
       (v) => z.object({ message: z.string() }).parse(v),
       `Write a short, friendly message asking a bank customer to fix these onboarding issues. Do not mention fraud or risk scores.\n- ${issues.join("\n- ")}`)).message,
-
-  compilePolicy: (englishText) =>
-    jsonCall("policy", {
-      type: "object",
-      properties: {
-        id: { type: "string" }, version: { type: "integer" }, name: { type: "string" }, customerCategory: { type: "string" },
-        requiredDocuments: { type: "array", items: { type: "object", properties: { label: { type: "string" }, anyOf: { type: "array", items: { type: "string", enum: DocType.options } } }, required: ["label", "anyOf"], additionalProperties: false } },
-        minAge: { type: "integer" }, proofOfAddressMaxAgeDays: { type: "integer" }, selfieRequired: { type: "boolean" }, authorityLookup: { type: "boolean" },
-        risk: { type: "object", properties: { autoApproveMax: { type: "number" } }, required: ["autoApproveMax"], additionalProperties: false },
-      },
-      required: ["id", "version", "name", "customerCategory", "requiredDocuments", "minAge", "proofOfAddressMaxAgeDays", "selfieRequired", "authorityLookup", "risk"],
-      additionalProperties: false,
-    }, (v) => v,
-      "Convert this KYC policy into the JSON spec. Use sensible defaults for anything the text does not state " +
-      `(minAge 18, proofOfAddressMaxAgeDays 90, risk.autoApproveMax 25).\n\nPolicy:\n${englishText}`),
 };

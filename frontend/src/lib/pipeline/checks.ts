@@ -20,7 +20,7 @@ export function ruleChecks(docs: ProcessedDoc[], policy: PolicySpec, asOf: Date 
   const add = (c: Omit<Check, "step">) => out.push({ step: "rules", ...c });
 
   for (const req of policy.requiredDocuments) {
-    if (!docs.some((d) => req.anyOf.includes(d.docType)))
+    if (!docs.some((d) => req.anyOf.some((t) => t === d.docType)))
       add({ code: "missing_document", status: "fail", category: "customer_fixable", message: `Missing required document: ${req.label}.` });
   }
 

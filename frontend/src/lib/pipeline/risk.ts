@@ -25,5 +25,6 @@ export function decide(checks: Check[], score: number, policy: PolicySpec): Deci
   const blocking = checks.filter((c) => c.status === "fail");
   if (blocking.some((c) => c.category === "integrity")) return "manual_review";
   if (blocking.some((c) => c.category === "customer_fixable")) return "request_info";
-  return score <= policy.risk.autoApproveMax ? "auto_approve" : "manual_review";
+  if (!policy.autoApproveEnabled) return "manual_review";
+  return score <= policy.autoApproveMaxScore ? "auto_approve" : "manual_review";
 }

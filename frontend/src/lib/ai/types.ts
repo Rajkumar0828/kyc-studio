@@ -1,9 +1,11 @@
-import type { DocType } from "../policy/schema";
+import type { Decision } from "../pipeline/types";
+import type { CompiledRules, DocType, PolicySpec } from "../policy/schema";
 
 export interface InputFile {
   filename: string;
   mime: string;
   bytes: Buffer;
+  declaredType?: DocType; // the upload slot it came from; a hint, not evidence
 }
 
 export interface Field {
@@ -37,5 +39,27 @@ export interface AiProvider {
   compareValues(field: string, a: string, b: string): Promise<ValueComparison>;
   summarizeForReviewer(input: RiskSummaryInput): Promise<string>;
   customerGuidance(issues: string[]): Promise<string>;
-  compilePolicy(englishText: string): Promise<unknown>; // validated by PolicySpec afterwards
+}
+
+export interface CompileWarning {
+  kind: "unsupported" | "conflict" | "default";
+  sentence?: string;
+  message: string;
+}
+
+// English policy text -> rules from the closed RuleKind vocabulary. Output is
+// untrusted: API routes validate it with CompiledRules before use.
+export interface PolicyCompiler {
+  name: string;
+  compile(text: string): Promise<{ rules: CompiledRules; warnings: CompileWarning[] }>;
+}
+
+export const JOURNEY_STEPS = ["consent", "tour", "documents", "selfie", "review", "result"] as const;
+export type JourneyStep = (typeof JOURNEY_STEPS)[number];
+
+// Customer-facing wording for the apply journey. Never decides anything.
+export interface CustomerGuide {
+  name: string;
+  stepHelp(policy: PolicySpec): Promise<Record<JourneyStep, string>>;
+  resultMessage(decision: Decision, fixes: string[]): Promise<string>;
 }
