@@ -3,7 +3,7 @@ import path from "node:path";
 import { extractId, countIdTokens } from "../src/lib/meta/extractId";
 
 // Usage: npx tsx --env-file=.env.local scripts/day1.ts [path/to/specimen.png]
-const imgPath = process.argv[2] ?? "../eval/specimens/id-01.png";
+const imgPath = process.argv[2] ?? "../eval/specimens/p1-clean/id.png";
 const mime = imgPath.toLowerCase().endsWith(".jpg") || imgPath.toLowerCase().endsWith(".jpeg") ? "image/jpeg" : "image/png";
 const img = fs.readFileSync(imgPath).toString("base64");
 
