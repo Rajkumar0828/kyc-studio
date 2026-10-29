@@ -1,4 +1,5 @@
 import type { DocType } from "../policy/schema";
+import { matchSpecimen } from "./specimens";
 import type { AiProvider, Extraction, Field, FieldName, InputFile } from "./types";
 
 // Deterministic stand-in for the model. Filename hints drive the scenario so
@@ -6,7 +7,9 @@ import type { AiProvider, Extraction, Field, FieldName, InputFile } from "./type
 //   passport / license / national_id / utility / statement -> document type
 //   "expired" -> past expiry, "mismatch" -> different name, "minor" -> under 18,
 //   "unknownperson" -> not in the mock registry, "blurry" -> low confidence
-// Without a filename hint, the upload slot's declared type is used.
+// Exception: uploads identical to an eval specimen return that specimen's
+// ground truth (see specimens.ts). Without a filename hint, the upload slot's
+// declared type is used.
 const f = (value: string, confidence = 0.96, box: Field["box"] = [100, 100, 600, 160]): Field =>
   ({ found: value !== "", value, confidence, box: value ? box : [0, 0, 0, 0] });
 
@@ -26,12 +29,16 @@ export const mockProvider: AiProvider = {
   name: "mock",
 
   async classifyDocument(file) {
+    const specimen = await matchSpecimen(file.bytes);
+    if (specimen?.documentType) return { docType: specimen.documentType, confidence: 0.99 };
     const docType = typeFromName(file.filename);
     if (docType === "unknown" && file.declaredType) return { docType: file.declaredType, confidence: 0.8 };
     return { docType, confidence: docType === "unknown" ? 0.3 : 0.97 };
   },
 
   async extractFields(file: InputFile, docType: DocType): Promise<Extraction> {
+    const specimen = await matchSpecimen(file.bytes);
+    if (specimen?.extraction) return { ...specimen.extraction, document_type: docType };
     const n = file.filename.toLowerCase();
     const conf = n.includes("blurry") ? 0.55 : 0.96;
     const name = n.includes("mismatch") ? "Jonathan Mercer" : n.includes("unknownperson") ? "Priya Raman" : "Emily Carter";

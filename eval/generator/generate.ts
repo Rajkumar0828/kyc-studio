@@ -105,7 +105,17 @@ async function main() {
 
   writeJson(path.join(OUT, "index.json"), {
     seed: SEED,
-    cases: cases.map((c) => ({ case_id: c.caseId, as_of: c.asOf, defects: c.defects, expected_decision: c.expected.decision })),
+    // files lets the app's mock mode recognise uploaded specimens (frontend/src/lib/ai/specimens.ts).
+    cases: cases.map((c) => ({
+      case_id: c.caseId,
+      as_of: c.asOf,
+      defects: c.defects,
+      expected_decision: c.expected.decision,
+      files: [
+        ...(["id", "bill"] as const).map((d) => ({ file: `${c.caseId}/${d}.png`, role: "document", document_type: DOC_TYPE[d], truth: `${c.caseId}/${d}.truth.json` })),
+        { file: `${c.caseId}/selfie.png`, role: "selfie" },
+      ],
+    })),
   });
 
   // The blurry defect is only meaningful if the pipeline's quality gate catches it.
