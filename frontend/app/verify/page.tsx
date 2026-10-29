@@ -4,24 +4,30 @@ import { useState } from "react";
 import { DEFAULT_POLICIES } from "@/src/lib/policy/defaults";
 import type { Check, PipelineResult } from "@/src/lib/pipeline/types";
 
-// Header-only PNG of a given size: enough for the quality gate and the mock
-// provider (which reads filename hints), so scenarios run without real images.
-function fakePng(name: string, w = 1600, h = 1000, size = 200_000): File {
-  const b = new Uint8Array(size);
-  b.set([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 13, 0x49, 0x48, 0x44, 0x52]);
-  const v = new DataView(b.buffer);
-  v.setUint32(16, w);
-  v.setUint32(20, h);
-  return new File([b], name, { type: "image/png" });
+// A real PNG of the given size with lines of text on it: the quality gate decodes
+// pixels (for the sharpness check) and the mock provider reads filename hints.
+async function fakePng(name: string, w = 1600, h = 1000): Promise<File> {
+  const canvas = document.createElement("canvas");
+  canvas.width = w;
+  canvas.height = h;
+  const ctx = canvas.getContext("2d")!;
+  ctx.fillStyle = "#fff";
+  ctx.fillRect(0, 0, w, h);
+  ctx.fillStyle = "#111";
+  ctx.font = `${Math.round(h / 28)}px monospace`;
+  for (let y = h / 20, i = 0; y < h; y += h / 18, i++)
+    ctx.fillText(`SPECIMEN ${name.toUpperCase()} LINE ${i} ${(i * 7919).toString(36).toUpperCase()} 0123456789`, w / 40, y);
+  const blob = await new Promise<Blob>((resolve) => canvas.toBlob((b) => resolve(b!), "image/png"));
+  return new File([blob], name, { type: "image/png" });
 }
 
 const SCENARIOS = [
-  { name: "Happy path", policy: "housing-loan", docs: () => [fakePng("passport.png"), fakePng("utility_bill.png")] },
-  { name: "Name mismatch", policy: "housing-loan", docs: () => [fakePng("passport.png"), fakePng("utility_bill_mismatch.png")] },
-  { name: "Expired ID", policy: "general-account", docs: () => [fakePng("drivers_license_expired.png")] },
-  { name: "Blurry photo", policy: "general-account", docs: () => [fakePng("passport.png", 480, 320)] },
-  { name: "Not in registry", policy: "general-account", docs: () => [fakePng("national_id_unknownperson.png")] },
-  { name: "Missing proof of address", policy: "housing-loan", docs: () => [fakePng("passport.png")] },
+  { name: "Happy path", policy: "housing-loan", docs: () => Promise.all([fakePng("passport.png"), fakePng("utility_bill.png")]) },
+  { name: "Name mismatch", policy: "housing-loan", docs: () => Promise.all([fakePng("passport.png"), fakePng("utility_bill_mismatch.png")]) },
+  { name: "Expired ID", policy: "general-account", docs: () => Promise.all([fakePng("drivers_license_expired.png")]) },
+  { name: "Blurry photo", policy: "general-account", docs: () => Promise.all([fakePng("passport.png", 480, 320)]) },
+  { name: "Not in registry", policy: "general-account", docs: () => Promise.all([fakePng("national_id_unknownperson.png")]) },
+  { name: "Missing proof of address", policy: "housing-loan", docs: () => Promise.all([fakePng("passport.png")]) },
 ];
 
 const STEPS = [
@@ -100,7 +106,7 @@ export default function VerifyPage() {
             <h2 className="mb-3 font-semibold">Demo scenarios</h2>
             <div className="grid grid-cols-2 gap-2">
               {SCENARIOS.map((s) => (
-                <button key={s.name} disabled={busy} onClick={() => { setPolicyId(s.policy); run(s.policy, s.docs(), fakePng("selfie.png")); }}
+                <button key={s.name} disabled={busy} onClick={async () => { setPolicyId(s.policy); run(s.policy, await s.docs(), await fakePng("selfie.png")); }}
                   className="rounded-lg border border-zinc-200 px-3 py-2 text-left text-sm hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:hover:bg-zinc-800">
                   {s.name}
                 </button>
