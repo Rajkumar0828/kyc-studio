@@ -1,0 +1,41 @@
+import type { DocType } from "../policy/schema";
+
+export interface InputFile {
+  filename: string;
+  mime: string;
+  bytes: Buffer;
+}
+
+export interface Field {
+  found: boolean;
+  value: string;
+  confidence: number; // 0..1
+  box: [number, number, number, number]; // 0-1000 grid, [0,0,0,0] if not found
+}
+
+export type FieldName = "full_name" | "date_of_birth" | "document_number" | "expiry_date" | "issue_date" | "address";
+export type Extraction = { document_type: DocType } & Record<FieldName, Field>;
+
+export interface ValueComparison {
+  same: boolean;
+  confidence: number;
+  reason: string;
+}
+
+export interface RiskSummaryInput {
+  score: number;
+  reasons: string[];
+  decision: string;
+}
+
+// Everything the platform asks of a model goes through this interface, so the
+// whole pipeline runs on MockProvider now and switches to Meta with one env var.
+export interface AiProvider {
+  name: string;
+  classifyDocument(file: InputFile): Promise<{ docType: DocType; confidence: number }>;
+  extractFields(file: InputFile, docType: DocType): Promise<Extraction>;
+  compareValues(field: string, a: string, b: string): Promise<ValueComparison>;
+  summarizeForReviewer(input: RiskSummaryInput): Promise<string>;
+  customerGuidance(issues: string[]): Promise<string>;
+  compilePolicy(englishText: string): Promise<unknown>; // validated by PolicySpec afterwards
+}

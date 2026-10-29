@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { meta, MODEL } from "./client";
+import { getMeta, MODEL } from "./client";
 
 const field = {
   type: "object",
@@ -53,7 +53,7 @@ export const PROMPT =
 
 // No system message: grounding works best with an uncluttered prompt.
 export async function extractId(imageBase64: string, mime = "image/png"): Promise<IdExtraction> {
-  const res = await meta.chat.completions.create({
+  const res = await getMeta().chat.completions.create({
     model: MODEL,
     messages: [
       {
@@ -74,7 +74,7 @@ export async function extractId(imageBase64: string, mime = "image/png"): Promis
 
 // Exact input-token count for the same request, via POST /v1/responses/input_tokens.
 export async function countIdTokens(imageBase64: string, mime = "image/png") {
-  const r = await meta.responses.inputTokens.count({
+  const r = await getMeta().responses.inputTokens.count({
     model: MODEL,
     input: [
       {
