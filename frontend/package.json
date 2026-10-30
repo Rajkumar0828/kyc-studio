@@ -10,7 +10,9 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "specimens": "npm run generate --prefix ../eval/generator"
+    "specimens": "npm run generate --prefix ../eval/generator",
+    "eval:meta": "tsx --env-file=.env.local scripts/eval-meta/run.ts",
+    "test:eval": "tsx scripts/eval-score-test.ts && tsx scripts/eval-cache-test.ts"
   },
   "dependencies": {
     "install": "^0.13.0",

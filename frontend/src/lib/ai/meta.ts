@@ -64,7 +64,7 @@ export function metaSettings(opts: MetaProviderOptions = {}) {
   };
 }
 
-const send: ChatSend = async (body) => {
+export const sendChatCompletion: ChatSend = async (body) => {
   const res = await getMeta().chat.completions.create(body);
   return { content: res.choices[0]?.message.content ?? null, finishReason: res.choices[0]?.finish_reason ?? null, usage: res.usage };
 };
@@ -133,7 +133,7 @@ export const META_PROMPTS = {
 export function createMetaProvider(opts: MetaProviderOptions = {}): AiProvider {
   async function jsonCall<T>(step: MetaStep, parse: (v: unknown) => T, text: string, file?: InputFile): Promise<T> {
     const body = buildRequest(step, META_SCHEMAS[step], text, file, opts);
-    const res = opts.call ? await opts.call(step, body, send) : await send(body);
+    const res = opts.call ? await opts.call(step, body, sendChatCompletion) : await sendChatCompletion(body);
     if (res.finishReason === "length") throw new MetaOutputTruncated(step, body.max_completion_tokens);
     return parse(JSON.parse(res.content ?? "{}"));
   }
