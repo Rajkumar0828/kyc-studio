@@ -150,3 +150,7 @@ vite.config.ts.timestamp-*
 
 # Local eval output (box overlays)
 eval/out/
+
+# Meta eval: response cache and run reports (model output, not committed)
+eval/.cache/
+eval/reports/
