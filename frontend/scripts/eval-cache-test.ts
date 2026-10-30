@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { buildRequest, createMetaProvider, META_PROMPTS, META_SCHEMAS, MetaOutputTruncated, type ChatRequest, type ChatResult } from "../src/lib/ai/meta";
+import { buildRequest, createMetaProvider, META_PROMPTS, META_SCHEMAS, MetaOutputTruncated, type ChatResult } from "../src/lib/ai/meta";
 import { qualityProblems } from "../src/lib/pipeline/quality";
 import type { Check } from "../src/lib/pipeline/types";
 import { getDefaultPolicy } from "../src/lib/policy/defaults";
@@ -38,7 +38,7 @@ async function main() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "kyc-eval-cache-"));
   const records: CallRecord[] = [];
   let sends = 0;
-  const fakeSend = async (_b: ChatRequest) => {
+  const fakeSend = async () => {
     sends++;
     return reply;
   };
