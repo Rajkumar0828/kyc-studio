@@ -1,7 +1,14 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useState } from "react";
+import { Badge, type Tone } from "@/app/components/Badge";
+import { Button, ButtonLink } from "@/app/components/Button";
+import { Card, CardHeader } from "@/app/components/Card";
+import { cx } from "@/app/components/cx";
+import { EmptyState } from "@/app/components/EmptyState";
+import { ErrorNotice } from "@/app/components/ErrorNotice";
+import { Field, TextArea, TextInput } from "@/app/components/Field";
+import { Icon, Spinner } from "@/app/components/Icon";
 import { ProviderBadge } from "@/app/components/ProviderBadge";
 import type { CompileWarning } from "@/src/lib/ai/types";
 import { api, postJson } from "@/src/lib/client/api";
@@ -15,19 +22,16 @@ interface Compiled {
   provider: string; // "saved" when loaded from a stored policy
 }
 
-const card = "rounded-xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900";
-const input = "w-full rounded-lg border border-zinc-300 bg-transparent px-3 py-2 dark:border-zinc-700";
-const btn = "rounded-lg px-4 py-2.5 font-medium disabled:opacity-50";
 const pickRules = (r: CompiledRules): CompiledRules => {
   const { provenance, requiredDocuments, minAge, proofOfAddressMaxAgeDays, selfieRequired, authorityLookup, autoApproveEnabled, autoApproveMaxScore, retentionDays } = r;
   return { provenance, requiredDocuments, minAge, proofOfAddressMaxAgeDays, selfieRequired, authorityLookup, autoApproveEnabled, autoApproveMaxScore, retentionDays };
 };
 const slug = (name: string) => name.toLowerCase().normalize("NFKD").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 48);
 
-const WARNING_STYLE: Record<CompileWarning["kind"], string> = {
-  unsupported: "bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-300",
-  conflict: "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300",
-  default: "bg-zinc-200 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300",
+const WARNING: Record<CompileWarning["kind"], { tone: Tone; label: string; hint: string }> = {
+  unsupported: { tone: "danger", label: "Not supported", hint: "Ignored. Rephrase it as a supported rule, or handle it outside this policy." },
+  conflict: { tone: "warning", label: "Conflict", hint: "Two sentences disagree; the first one was kept." },
+  default: { tone: "neutral", label: "Default used", hint: "Not stated in the text, so a default applies." },
 };
 
 export function PolicyStudio({ editId }: { editId?: string }) {
@@ -129,111 +133,135 @@ export function PolicyStudio({ editId }: { editId?: string }) {
     ...compiled.rules,
   };
   const canSave = !!compiled && !stale && !!name.trim() && !!category.trim() && !!consent.trim() && busy === null;
+  const status = published
+    ? null
+    : saved && !dirty ? `Draft v${saved.version} saved. Ready to publish.` : saved ? "Unsaved changes." : compiled ? "Save a draft before publishing." : "Compile the policy first.";
 
   return (
-    <div className="grid gap-6 lg:grid-cols-2">
-      <section className="flex flex-col gap-6">
-        <div className={card}>
+    <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+      <section aria-label="Policy input" className="flex flex-col gap-6">
+        <Card>
+          <CardHeader title="Details" />
           <div className="grid gap-4 sm:grid-cols-2">
-            <label className="block text-sm font-medium">
-              Policy name
-              <input value={name} onChange={(e) => edit(setName)(e.target.value)} disabled={!!editId} placeholder="e.g. Student account" className={`${input} mt-1 font-normal`} />
-            </label>
-            <label className="block text-sm font-medium">
-              Customer category
-              <input value={category} onChange={(e) => edit(setCategory)(e.target.value)} placeholder="e.g. retail" className={`${input} mt-1 font-normal`} />
-            </label>
+            <Field id="policy-name" label="Policy name" hint={!editId && name ? <>id: <span className="font-mono">{slug(name) || "(needs letters or digits)"}</span></> : undefined}>
+              <TextInput id="policy-name" value={name} onChange={(e) => edit(setName)(e.target.value)} disabled={!!editId}
+                placeholder="e.g. Student account" aria-describedby={!editId && name ? "policy-name-hint" : undefined} />
+            </Field>
+            <Field id="policy-category" label="Customer category">
+              <TextInput id="policy-category" value={category} onChange={(e) => edit(setCategory)(e.target.value)} placeholder="e.g. retail" />
+            </Field>
           </div>
-          {name && !editId && <p className="mt-2 font-mono text-xs text-zinc-500">id: {slug(name) || "(needs letters or digits)"}</p>}
-        </div>
+        </Card>
 
-        <div className={card}>
-          <label htmlFor="policy-text" className="mb-1 block text-sm font-medium">Policy in plain English</label>
-          <textarea id="policy-text" value={text} onChange={(e) => edit(setText)(e.target.value)} rows={9} maxLength={4000}
-            placeholder="Require a passport. Applicants must be at least 18 years old. …" className={`${input} font-normal`} />
-          <div className="mt-3">
-            <p className="mb-2 text-xs font-medium text-zinc-500">Examples</p>
-            <div className="flex flex-wrap gap-2">
+        <Card>
+          <CardHeader title="Policy in plain English" description="One rule per sentence works best. Only the nine supported rule kinds are applied; everything else is flagged." />
+          <div className="mb-3">
+            <p id="examples-label" className="mb-2 text-xs font-medium uppercase tracking-wide text-zinc-500">Start from an example</p>
+            <div role="group" aria-labelledby="examples-label" className="flex flex-wrap gap-2">
               {EXAMPLE_PROMPTS.map((ex) => (
-                <button key={ex.title} onClick={() => { edit(setText)(ex.text); if (!name && !editId) setName(ex.title); }}
-                  className="rounded-full border border-zinc-300 px-3 py-1 text-xs hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-800">
+                <button key={ex.title} type="button" onClick={() => { edit(setText)(ex.text); if (!name && !editId) setName(ex.title); }}
+                  className="rounded-full border border-zinc-300 bg-white px-3 py-1 text-xs font-medium text-zinc-700 motion-safe:transition-colors hover:border-accent-400 hover:text-accent-700 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:text-accent-300">
                   {ex.title}
                 </button>
               ))}
             </div>
           </div>
-          <button onClick={compile} disabled={!text.trim() || busy !== null} className={`${btn} mt-4 bg-blue-600 text-white hover:bg-blue-700`}>
-            {busy === "compile" ? "Compiling…" : "Compile"}
-          </button>
-          {stale && <p className="mt-2 text-sm text-amber-700 dark:text-amber-400">The text changed since the last compile. Compile again before saving.</p>}
-        </div>
+          <label htmlFor="policy-text" className="sr-only">Policy text</label>
+          <TextArea id="policy-text" value={text} onChange={(e) => edit(setText)(e.target.value)} rows={9} maxLength={4000}
+            placeholder="Require a passport. Applicants must be at least 18 years old. …" />
+          <div className="mt-4 flex flex-wrap items-center gap-3">
+            <Button onClick={compile} disabled={!text.trim() || busy !== null}>
+              {busy === "compile" ? <><Spinner /> Compiling…</> : <><Icon name="sparkle" /> Compile</>}
+            </Button>
+            <span className="text-xs text-zinc-500">{text.length}/4000</span>
+          </div>
+          {stale && <div className="mt-4"><ErrorNotice tone="warning">The text changed since the last compile. Compile again before saving.</ErrorNotice></div>}
+        </Card>
 
-        <div className={card}>
-          <label htmlFor="consent" className="mb-1 block text-sm font-medium">Consent text</label>
-          <p className="mb-2 text-xs text-zinc-500">Shown to customers word for word. Written by you, never by the AI; filled from a template until you edit it.</p>
-          <textarea id="consent" value={consent} onChange={(e) => { edit(setConsent)(e.target.value); setConsentEdited(true); }} rows={5} maxLength={2000} className={`${input} font-normal`} />
-        </div>
+        <Card>
+          <Field id="consent" label="Consent text" hint="Shown to customers word for word. Written by you, never by the AI; filled from a template until you edit it.">
+            <TextArea id="consent" aria-describedby="consent-hint" value={consent} onChange={(e) => { edit(setConsent)(e.target.value); setConsentEdited(true); }} rows={5} maxLength={2000} />
+          </Field>
+        </Card>
       </section>
 
-      <section className="flex flex-col gap-6">
-        {error && <div className="rounded-xl border border-red-300 bg-red-50 p-4 text-red-800 dark:border-red-900 dark:bg-red-950 dark:text-red-300">{error}</div>}
+      <section aria-label="Compiled policy" className="flex flex-col gap-6 lg:sticky lg:top-6">
+        {error && <ErrorNotice title="Something went wrong">{error}</ErrorNotice>}
 
-        {!compiled && <div className={`${card} text-zinc-500`}>Compile the policy text to see a preview.</div>}
-
-        {compiled && (
+        {!compiled ? (
+          <EmptyState icon="sparkle" title="Nothing compiled yet" description="Pick an example or write your own rules, then press Compile to see each setting and where it came from." />
+        ) : (
           <>
-            <div className={card}>
-              <div className="mb-4 flex items-center justify-between gap-2">
-                <h2 className="font-semibold">Preview</h2>
-                <div className="flex items-center gap-3">
-                  {compiled.provider === "saved" ? <span className="text-xs text-zinc-500">saved version</span> : <ProviderBadge provider={compiled.provider} label="Compiled by" />}
-                  <button onClick={() => setShowJson(!showJson)} className="text-sm text-blue-600 hover:underline dark:text-blue-400">{showJson ? "Show summary" : "Show JSON"}</button>
-                </div>
-              </div>
-              {showJson ? <pre className="max-h-[32rem] overflow-auto rounded-lg bg-zinc-50 p-3 text-xs dark:bg-zinc-950">{JSON.stringify(preview, null, 2)}</pre> : <Summary rules={compiled.rules} />}
-            </div>
-
-            <div className={card}>
-              <h2 className="mb-3 font-semibold">Warnings {compiled.warnings.length > 0 && <span className="text-zinc-500">({compiled.warnings.length})</span>}</h2>
-              {compiled.warnings.length === 0 ? (
-                <p className="text-sm text-zinc-500">None. Every sentence mapped to a supported rule.</p>
+            <Card>
+              <CardHeader title="Preview"
+                actions={
+                  <>
+                    {compiled.provider === "saved" ? <Badge>saved version</Badge> : <ProviderBadge provider={compiled.provider} label="Compiled by" />}
+                    <div role="group" aria-label="Preview format" className="inline-flex rounded-lg border border-zinc-200 p-0.5 dark:border-zinc-700">
+                      {(["Summary", "JSON"] as const).map((v) => {
+                        const on = (v === "JSON") === showJson;
+                        return (
+                          <button key={v} type="button" aria-pressed={on} onClick={() => setShowJson(v === "JSON")}
+                            className={cx("rounded-md px-2.5 py-1 text-xs font-medium motion-safe:transition-colors", on ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900" : "text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100")}>
+                            {v}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </>
+                } />
+              {showJson ? (
+                <pre className="max-h-[32rem] overflow-auto rounded-xl bg-zinc-950 p-4 font-mono text-xs leading-relaxed text-zinc-100">{JSON.stringify(preview, null, 2)}</pre>
               ) : (
-                <ul className="flex flex-col gap-2 text-sm">
+                <Summary rules={compiled.rules} />
+              )}
+            </Card>
+
+            <Card>
+              <CardHeader title={<>Warnings {compiled.warnings.length > 0 && <span className="font-normal text-zinc-500">({compiled.warnings.length})</span>}</>} />
+              {compiled.warnings.length === 0 ? (
+                <p className="flex items-center gap-2 text-sm text-emerald-700 dark:text-emerald-400"><Icon name="check" /> None. Every sentence mapped to a supported rule.</p>
+              ) : (
+                <ul className="flex flex-col gap-3">
                   {compiled.warnings.map((w, i) => (
-                    <li key={i} className="flex flex-col gap-1">
-                      <span><span className={`mr-2 rounded px-1.5 py-0.5 text-xs font-medium ${WARNING_STYLE[w.kind]}`}>{w.kind}</span>{w.message}</span>
-                      {w.sentence && <q className="text-zinc-500">{w.sentence}</q>}
+                    <li key={i} className="rounded-xl border border-zinc-200 p-3 text-sm dark:border-zinc-800">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Badge tone={WARNING[w.kind].tone}>{WARNING[w.kind].label}</Badge>
+                        <span className="font-medium text-zinc-900 dark:text-zinc-100">{w.message}</span>
+                      </div>
+                      {w.sentence && <blockquote className="mt-2 border-l-2 border-zinc-300 pl-3 text-zinc-600 dark:border-zinc-700 dark:text-zinc-400">{w.sentence}</blockquote>}
+                      <p className="mt-1.5 text-xs text-zinc-500">{WARNING[w.kind].hint}</p>
                     </li>
                   ))}
                 </ul>
               )}
-            </div>
+            </Card>
           </>
         )}
 
-        <div className={`${card} flex flex-wrap items-center gap-3`}>
-          <button onClick={saveDraft} disabled={!canSave} className={`${btn} border border-zinc-300 hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-800`}>
-            {busy === "save" ? "Saving…" : "Save draft"}
-          </button>
-          <button onClick={publish} disabled={!saved || dirty || busy !== null} className={`${btn} bg-emerald-600 text-white hover:bg-emerald-700`}>
-            {busy === "publish" ? "Publishing…" : "Publish"}
-          </button>
-          <span className="text-sm text-zinc-500">
-            {published ? "" : saved && !dirty ? `Draft v${saved.version} saved.` : saved ? "Unsaved changes." : "Save a draft before publishing."}
-          </span>
+        <Card>
+          <div className="flex flex-wrap items-center gap-3">
+            <Button variant="secondary" onClick={saveDraft} disabled={!canSave}>{busy === "save" ? <><Spinner /> Saving…</> : "Save draft"}</Button>
+            <Button variant="success" onClick={publish} disabled={!saved || dirty || busy !== null}>{busy === "publish" ? <><Spinner /> Publishing…</> : "Publish"}</Button>
+          </div>
+          {status && <p className="mt-3 text-sm text-zinc-500" aria-live="polite">{status}</p>}
           {published && (
-            <span className="text-sm text-emerald-700 dark:text-emerald-400">
-              Published v{published.version}. <Link href={`/apply/${published.id}`} className="underline">Open the journey</Link> or <Link href="/admin/policies" className="underline">back to policies</Link>.
-            </span>
+            <div className="mt-3 flex flex-wrap items-center gap-3 text-sm" aria-live="polite">
+              <span className="flex items-center gap-1.5 font-medium text-emerald-700 dark:text-emerald-400"><Icon name="check" /> Published v{published.version}.</span>
+              <ButtonLink href={`/apply/${published.id}`} size="sm">Open the journey <Icon name="arrowRight" /></ButtonLink>
+              <ButtonLink href="/admin/policies" size="sm" variant="ghost">Back to policies</ButtonLink>
+            </div>
           )}
-        </div>
+        </Card>
       </section>
     </div>
   );
 }
 
+// One card row per setting, with the sentence(s) it came from.
 function Summary({ rules }: { rules: CompiledRules }) {
   const from = (...kinds: RuleKind[]) => rules.provenance.filter((p) => kinds.includes(p.rule)).map((p) => p.sentence);
+  const hasPoa = rules.requiredDocuments.some((d) => d.label === "Proof of address");
   const rows: Array<{ label: string; value: string; sources: string[] }> = [
     ...rules.requiredDocuments.map((d) => ({
       label: d.label,
@@ -241,11 +269,9 @@ function Summary({ rules }: { rules: CompiledRules }) {
       sources: from(d.label === "Proof of address" ? "require_address_doc" : "require_identity_doc"),
     })),
     { label: RULE_LABEL.min_age, value: `${rules.minAge} years`, sources: from("min_age") },
-    ...(rules.requiredDocuments.some((d) => d.label === "Proof of address")
-      ? [{ label: RULE_LABEL.poa_max_age, value: `Issued within ${rules.proofOfAddressMaxAgeDays} days`, sources: from("poa_max_age") }]
-      : []),
+    ...(hasPoa ? [{ label: RULE_LABEL.poa_max_age, value: `Issued within ${rules.proofOfAddressMaxAgeDays} days`, sources: from("poa_max_age") }] : []),
     { label: RULE_LABEL.selfie_required, value: rules.selfieRequired ? "Required" : "Not required", sources: from("selfie_required") },
-    { label: RULE_LABEL.authority_lookup, value: rules.authorityLookup ? "Check ID against the registry" : "Off", sources: from("authority_lookup") },
+    { label: RULE_LABEL.authority_lookup, value: rules.authorityLookup ? "Check the ID against the registry" : "Off", sources: from("authority_lookup") },
     {
       label: "Auto-approval",
       value: rules.autoApproveEnabled ? `When the risk score is ${rules.autoApproveMaxScore} or lower` : "Never: every case goes to manual review",
@@ -254,20 +280,21 @@ function Summary({ rules }: { rules: CompiledRules }) {
     { label: RULE_LABEL.retention, value: `${rules.retentionDays} days`, sources: from("retention") },
   ];
   return (
-    <dl className="divide-y divide-zinc-200 text-sm dark:divide-zinc-800">
+    <ul className="flex flex-col gap-2">
       {rows.map((r, i) => (
-        <div key={i} className="grid grid-cols-[10rem_1fr] gap-3 py-2.5">
-          <dt className="text-zinc-500">{r.label}</dt>
-          <dd>
-            <div className="font-medium">{r.value}</div>
-            {r.sources.length ? (
-              r.sources.map((s, j) => <q key={j} className="block text-xs text-zinc-500">{s}</q>)
-            ) : (
-              <span className="text-xs text-zinc-400">default (not stated)</span>
-            )}
-          </dd>
-        </div>
+        <li key={i} className="rounded-xl border border-zinc-200 p-3 dark:border-zinc-800">
+          <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+            <span className="text-xs font-medium uppercase tracking-wide text-zinc-500">{r.label}</span>
+            {!r.sources.length && <Badge>default</Badge>}
+          </div>
+          <p className="mt-1 font-medium text-zinc-900 dark:text-zinc-100">{r.value}</p>
+          {r.sources.map((s, j) => (
+            <blockquote key={j} className="mt-1.5 border-l-2 border-accent-300 pl-3 text-sm text-zinc-600 dark:border-accent-700 dark:text-zinc-400">
+              <span className="sr-only">Source sentence: </span>{s}
+            </blockquote>
+          ))}
+        </li>
       ))}
-    </dl>
+    </ul>
   );
 }

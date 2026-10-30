@@ -1,19 +1,16 @@
 import type { Metadata } from "next";
-import Link from "next/link";
+import { ButtonLink } from "@/app/components/Button";
+import { PageHeader } from "@/app/components/PageHeader";
 import { PolicyList } from "./PolicyList";
 
 export const metadata: Metadata = { title: "Policies · KYC Studio" };
 
 export default function PoliciesPage() {
   return (
-    <main className="mx-auto w-full max-w-6xl px-6 py-10">
-      <header className="mb-8 flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-semibold tracking-tight">Policies</h1>
-          <p className="mt-1 text-zinc-600 dark:text-zinc-400">Each policy decides which evidence a customer category must provide.</p>
-        </div>
-        <Link href="/admin/policies/new" className="rounded-lg bg-blue-600 px-4 py-2.5 font-medium text-white hover:bg-blue-700">New policy</Link>
-      </header>
+    <main className="mx-auto w-full max-w-6xl px-4 py-10 sm:px-6 sm:py-14">
+      <PageHeader eyebrow="Policies" title="Verification policies"
+        description="Each policy decides which evidence a customer category must provide. Published versions are immutable; edits become a new version."
+        actions={<ButtonLink href="/admin/policies/new">New policy</ButtonLink>} />
       <PolicyList />
     </main>
   );
