@@ -56,7 +56,7 @@ const MAX_BYTES = 10 * 1024 * 1024;
 // What the customer sees. Never a score or an integrity finding.
 const OUTCOME: Record<Decision, { title: string; icon: IconName; cls: string; iconCls: string }> = {
   auto_approve: {
-    title: "You're verified",
+    title: "Verification complete",
     icon: "check",
     cls: "border-emerald-200 bg-emerald-50 dark:border-emerald-900 dark:bg-emerald-950/50",
     iconCls: "bg-emerald-600 text-white dark:bg-emerald-500 dark:text-zinc-950",

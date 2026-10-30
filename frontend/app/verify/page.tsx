@@ -90,7 +90,7 @@ export default function VerifyPage() {
             <CardHeader title="Demo scenarios" description="Generated test images; the mock provider reads their file names." />
             <div className="grid grid-cols-2 gap-2">
               {SCENARIOS.map((s) => (
-                <Button key={s.name} variant="secondary" size="sm" disabled={busy} className="h-auto justify-start py-2 text-left whitespace-normal"
+                <Button key={s.name} variant="secondary" size="sm" disabled={busy} className="h-auto justify-start py-2 text-left whitespace-normal!"
                   onClick={async () => { setPolicyId(s.policy); run(s.policy, await s.docs(), await fakePng("selfie.png")); }}>
                   {s.name}
                 </Button>
