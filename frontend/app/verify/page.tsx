@@ -1,6 +1,18 @@
 "use client";
 
 import { useState } from "react";
+import { Badge, type Tone } from "@/app/components/Badge";
+import { Button } from "@/app/components/Button";
+import { Card, CardHeader } from "@/app/components/Card";
+import { cx } from "@/app/components/cx";
+import { EmptyState } from "@/app/components/EmptyState";
+import { ErrorNotice } from "@/app/components/ErrorNotice";
+import { Field, inputClass } from "@/app/components/Field";
+import { Spinner } from "@/app/components/Icon";
+import { PageHeader } from "@/app/components/PageHeader";
+import { PipelineActivity } from "@/app/components/PipelineActivity";
+import { ProviderBadge } from "@/app/components/ProviderBadge";
+import { Loading } from "@/app/components/Skeleton";
 import { DEFAULT_POLICIES } from "@/src/lib/policy/defaults";
 import type { Check, PipelineResult } from "@/src/lib/pipeline/types";
 
@@ -30,37 +42,13 @@ const SCENARIOS = [
   { name: "Missing proof of address", policy: "housing-loan", docs: () => Promise.all([fakePng("passport.png")]) },
 ];
 
-const STEPS = [
-  { key: "quality", label: "Quality gate", kind: "code" },
-  { key: "classify", label: "Classification", kind: "ai" },
-  { key: "extract", label: "Extraction", kind: "ai" },
-  { key: "rules", label: "Rule validation", kind: "code" },
-  { key: "cross_doc", label: "Cross-document", kind: "code + ai" },
-  { key: "authority", label: "Authority lookup", kind: "code" },
-  { key: "selfie", label: "Selfie check", kind: "code" },
-  { key: "risk", label: "Risk score", kind: "code + ai" },
-  { key: "decision", label: "Decision", kind: "rule" },
-] as const;
-
-const DECISION_STYLE: Record<string, { label: string; cls: string }> = {
-  auto_approve: { label: "Auto-approve", cls: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300" },
-  manual_review: { label: "Manual review", cls: "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300" },
-  request_info: { label: "Request more info", cls: "bg-sky-100 text-sky-800 dark:bg-sky-900/40 dark:text-sky-300" },
+const DECISION: Record<string, { label: string; tone: Tone }> = {
+  auto_approve: { label: "Auto-approve", tone: "success" },
+  manual_review: { label: "Manual review", tone: "warning" },
+  request_info: { label: "Request more info", tone: "info" },
 };
-
-const STATUS_DOT: Record<string, string> = { pass: "bg-emerald-500", warn: "bg-amber-500", fail: "bg-red-500", skip: "bg-zinc-300 dark:bg-zinc-700" };
-
-function stepStatus(key: string, r: PipelineResult): "pass" | "warn" | "fail" | "skip" {
-  const qualityFailed = r.checks.some((c) => c.step === "quality");
-  if (key === "quality") return qualityFailed ? "fail" : "pass";
-  if (qualityFailed && key !== "risk" && key !== "decision") return "skip";
-  if (key === "extract") return r.docs.some((d) => d.extraction) ? "pass" : "skip";
-  if (key === "risk") return r.score === 0 ? "pass" : r.score <= 25 ? "warn" : "fail";
-  if (key === "decision") return r.decision === "auto_approve" ? "pass" : "warn";
-  const cs = r.checks.filter((c) => c.step === key);
-  if (!cs.length) return key === "classify" ? "pass" : "skip";
-  return cs.some((c) => c.status === "fail") ? "fail" : cs.some((c) => c.status === "warn") ? "warn" : "pass";
-}
+const STATUS_DOT: Record<string, string> = { pass: "bg-emerald-500", warn: "bg-amber-500", fail: "bg-red-500" };
+const fileInput = cx(inputClass, "py-1.5 file:mr-3 file:rounded-md file:border-0 file:bg-zinc-100 file:px-3 file:py-1 file:text-sm file:font-medium dark:file:bg-zinc-800 dark:file:text-zinc-100");
 
 export default function VerifyPage() {
   const [policyId, setPolicyId] = useState(DEFAULT_POLICIES[1].id);
@@ -91,119 +79,103 @@ export default function VerifyPage() {
     }
   }
 
-  const card = "rounded-xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900";
-
   return (
-    <main className="mx-auto w-full max-w-6xl px-6 py-10">
-      <header className="mb-8">
-        <h1 className="text-3xl font-semibold tracking-tight">Verification playground</h1>
-        <p className="mt-1 text-zinc-600 dark:text-zinc-400">Run the KYC pipeline end to end. AI proposes, a human decides.</p>
-      </header>
+    <main className="mx-auto w-full max-w-6xl px-4 py-10 sm:px-6 sm:py-14">
+      <PageHeader eyebrow="Developer tool" title="Verification playground"
+        description="Run the full pipeline against a seed policy and inspect every check, score and extracted field. Customers never see this view." />
 
-      <div className="grid gap-6 lg:grid-cols-[360px_1fr]">
-        <section className="flex flex-col gap-6">
-          <div className={card}>
-            <h2 className="mb-3 font-semibold">Demo scenarios</h2>
+      <div className="grid items-start gap-6 lg:grid-cols-[22rem_minmax(0,1fr)]">
+        <section aria-label="Inputs" className="flex flex-col gap-6">
+          <Card>
+            <CardHeader title="Demo scenarios" description="Generated test images; the mock provider reads their file names." />
             <div className="grid grid-cols-2 gap-2">
               {SCENARIOS.map((s) => (
-                <button key={s.name} disabled={busy} onClick={async () => { setPolicyId(s.policy); run(s.policy, await s.docs(), await fakePng("selfie.png")); }}
-                  className="rounded-lg border border-zinc-200 px-3 py-2 text-left text-sm hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:hover:bg-zinc-800">
+                <Button key={s.name} variant="secondary" size="sm" disabled={busy} className="h-auto justify-start py-2 text-left whitespace-normal"
+                  onClick={async () => { setPolicyId(s.policy); run(s.policy, await s.docs(), await fakePng("selfie.png")); }}>
                   {s.name}
-                </button>
+                </Button>
               ))}
             </div>
-          </div>
+          </Card>
 
-          <div className={card}>
-            <h2 className="mb-3 font-semibold">Upload your own</h2>
-            <label className="mb-1 block text-sm font-medium">Policy</label>
-            <select value={policyId} onChange={(e) => setPolicyId(e.target.value)}
-              className="mb-2 w-full rounded-lg border border-zinc-300 bg-transparent px-3 py-2 dark:border-zinc-700">
-              {DEFAULT_POLICIES.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-            </select>
-            <ul className="mb-4 text-sm text-zinc-600 dark:text-zinc-400">
-              {policy.requiredDocuments.map((r) => <li key={r.label}>• {r.label}</li>)}
-              {policy.selfieRequired && <li>• Selfie</li>}
-              <li>• Minimum age {policy.minAge}</li>
-            </ul>
-            <label className="mb-1 block text-sm font-medium">Documents</label>
-            <input type="file" multiple accept="image/png,image/jpeg,application/pdf" onChange={(e) => setDocs(Array.from(e.target.files ?? []))}
-              className="mb-3 block w-full text-sm file:mr-3 file:rounded-md file:border-0 file:bg-zinc-100 file:px-3 file:py-1.5 dark:file:bg-zinc-800" />
-            <label className="mb-1 block text-sm font-medium">Selfie</label>
-            <input type="file" accept="image/png,image/jpeg" onChange={(e) => setSelfie(e.target.files?.[0] ?? null)}
-              className="mb-4 block w-full text-sm file:mr-3 file:rounded-md file:border-0 file:bg-zinc-100 file:px-3 file:py-1.5 dark:file:bg-zinc-800" />
-            <button disabled={busy || !docs.length} onClick={() => run(policyId, docs, selfie)}
-              className="w-full rounded-lg bg-blue-600 px-4 py-2.5 font-medium text-white hover:bg-blue-700 disabled:opacity-50">
-              {busy ? "Running…" : "Run verification"}
-            </button>
-            <p className="mt-3 text-xs text-zinc-500">
-              Mock AI mode reads the file name: include passport, license, national, utility or statement (and optionally expired, mismatch, blurry).
-            </p>
-          </div>
+          <Card>
+            <CardHeader title="Upload your own" />
+            <div className="flex flex-col gap-4">
+              <Field id="verify-policy" label="Policy">
+                <select id="verify-policy" value={policyId} onChange={(e) => setPolicyId(e.target.value)} className={inputClass}>
+                  {DEFAULT_POLICIES.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                </select>
+              </Field>
+              <ul className="text-sm text-zinc-600 dark:text-zinc-400">
+                {policy.requiredDocuments.map((r) => <li key={r.label}>• {r.label}</li>)}
+                {policy.selfieRequired && <li>• Selfie</li>}
+                <li>• Minimum age {policy.minAge}</li>
+              </ul>
+              <Field id="verify-docs" label="Documents">
+                <input id="verify-docs" type="file" multiple accept="image/png,image/jpeg,application/pdf" onChange={(e) => setDocs(Array.from(e.target.files ?? []))} className={fileInput} />
+              </Field>
+              <Field id="verify-selfie" label="Selfie">
+                <input id="verify-selfie" type="file" accept="image/png,image/jpeg" onChange={(e) => setSelfie(e.target.files?.[0] ?? null)} className={fileInput} />
+              </Field>
+              <Button disabled={busy || !docs.length} onClick={() => run(policyId, docs, selfie)} className="w-full">
+                {busy ? <><Spinner /> Running…</> : "Run verification"}
+              </Button>
+              <p className="text-xs text-zinc-500">
+                Mock mode reads the file name: include passport, license, national, utility or statement (optionally expired, mismatch, blurry). Eval specimens are recognised by content.
+              </p>
+            </div>
+          </Card>
         </section>
 
-        <section className="flex flex-col gap-6">
-          {error && <div className="rounded-xl border border-red-300 bg-red-50 p-4 text-red-800 dark:border-red-900 dark:bg-red-950 dark:text-red-300">{error}</div>}
-          {!result && !error && (
-            <div className={`${card} flex min-h-64 items-center justify-center text-zinc-500`}>
-              {busy ? "Running pipeline…" : "Pick a demo scenario or upload documents to see the result."}
-            </div>
-          )}
-          {result && <Result r={result} card={card} />}
+        <section aria-label="Result" aria-busy={busy} className="flex flex-col gap-6">
+          {error && <ErrorNotice title="The run failed">{error}</ErrorNotice>}
+          {busy && <Card><Loading label="Running the pipeline" lines={4} /></Card>}
+          {!result && !error && !busy && <EmptyState icon="code" title="No run yet" description="Pick a demo scenario or upload documents to see the pipeline's proposal." />}
+          {result && !busy && <Result r={result} />}
         </section>
       </div>
     </main>
   );
 }
 
-function Result({ r, card }: { r: PipelineResult; card: string }) {
-  const d = DECISION_STYLE[r.decision];
+function Result({ r }: { r: PipelineResult }) {
+  const d = DECISION[r.decision];
   const flagged = r.checks.filter((c) => c.status !== "pass");
   const passed = r.checks.filter((c) => c.status === "pass");
   return (
     <>
-      <div className={`${card} flex flex-wrap items-center justify-between gap-4`}>
+      <Card className="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <p className="text-sm text-zinc-500">{r.caseId} · {r.policy.id} v{r.policy.version} · provider: {r.provider}</p>
-          <span className={`mt-2 inline-block rounded-full px-3 py-1 text-sm font-semibold ${d.cls}`}>Proposed: {d.label}</span>
+          <p className="text-xs text-zinc-500">{r.caseId} · {r.policy.id} v{r.policy.version}</p>
+          <p className="mt-2 flex flex-wrap items-center gap-2">
+            <span className="text-sm font-medium">Proposed:</span>
+            <Badge tone={d.tone} className="text-sm">{d.label}</Badge>
+            <ProviderBadge provider={r.provider} />
+          </p>
         </div>
-        <div className="w-48">
-          <div className="flex justify-between text-sm"><span>Risk score</span><span className="font-semibold">{r.score}/100</span></div>
-          <div className="mt-1 h-2 rounded-full bg-zinc-200 dark:bg-zinc-800">
-            <div className={`h-2 rounded-full ${r.score <= 15 ? "bg-emerald-500" : r.score <= 40 ? "bg-amber-500" : "bg-red-500"}`} style={{ width: `${Math.max(r.score, 2)}%` }} />
+        <div className="w-full sm:w-56">
+          <div className="flex justify-between text-sm"><span id="risk-label">Risk score</span><span className="font-semibold tabular-nums">{r.score}/100</span></div>
+          <div className="mt-1.5 h-2 rounded-full bg-zinc-200 dark:bg-zinc-800" role="meter" aria-labelledby="risk-label" aria-valuemin={0} aria-valuemax={100} aria-valuenow={r.score}>
+            <div className={cx("h-2 rounded-full", r.score <= 15 ? "bg-emerald-500" : r.score <= 40 ? "bg-amber-500" : "bg-red-500")} style={{ width: `${Math.max(r.score, 2)}%` }} />
           </div>
         </div>
-      </div>
+      </Card>
 
-      <div className={card}>
-        <h3 className="mb-4 font-semibold">Pipeline</h3>
-        <ol className="grid grid-cols-3 gap-3 sm:grid-cols-5 lg:grid-cols-9">
-          {STEPS.map((s, i) => {
-            const st = stepStatus(s.key, r);
-            return (
-              <li key={s.key} className="flex flex-col items-center text-center">
-                <span className={`flex h-8 w-8 items-center justify-center rounded-full text-xs font-semibold text-white ${STATUS_DOT[st]}`}>{i + 2}</span>
-                <span className="mt-1 text-xs font-medium">{s.label}</span>
-                <span className="text-[10px] uppercase tracking-wide text-zinc-500">{st === "skip" ? "skipped" : s.kind}</span>
-              </li>
-            );
-          })}
-        </ol>
-      </div>
+      <PipelineActivity result={r} />
 
       <div className="grid gap-6 md:grid-cols-2">
-        <div className={card}>
-          <h3 className="mb-2 font-semibold">Reviewer summary</h3>
-          <p className="text-sm text-zinc-700 dark:text-zinc-300">{r.reviewerSummary}</p>
-        </div>
-        <div className={card}>
-          <h3 className="mb-2 font-semibold">Message to customer</h3>
-          <p className="text-sm text-zinc-700 dark:text-zinc-300">{r.customerMessage ?? "No action needed from the customer."}</p>
-        </div>
+        <Card>
+          <CardHeader level={3} title="Reviewer summary" actions={<ProviderBadge provider={r.provider} />} />
+          <p className="text-sm leading-relaxed text-zinc-700 dark:text-zinc-300">{r.reviewerSummary}</p>
+        </Card>
+        <Card>
+          <CardHeader level={3} title="Message to customer" actions={r.customerMessage ? <ProviderBadge provider={r.provider} /> : undefined} />
+          <p className="text-sm leading-relaxed text-zinc-700 dark:text-zinc-300">{r.customerMessage ?? "No action needed from the customer."}</p>
+        </Card>
       </div>
 
-      <div className={card}>
-        <h3 className="mb-3 font-semibold">Flags ({flagged.length})</h3>
+      <Card>
+        <CardHeader level={3} title={`Flags (${flagged.length})`} />
         {flagged.length ? <CheckList checks={flagged} /> : <p className="text-sm text-zinc-500">No flags raised.</p>}
         {passed.length > 0 && (
           <details className="mt-4">
@@ -211,27 +183,28 @@ function Result({ r, card }: { r: PipelineResult; card: string }) {
             <div className="mt-2"><CheckList checks={passed} /></div>
           </details>
         )}
-      </div>
+      </Card>
 
       {r.docs.length > 0 && (
-        <div className={card}>
-          <h3 className="mb-3 font-semibold">Extracted data</h3>
+        <Card>
+          <CardHeader level={3} title="Extracted data" actions={<ProviderBadge provider={r.provider} />} />
           <div className="grid gap-4 md:grid-cols-2">
             {r.docs.map((doc) => (
-              <div key={doc.index} className="rounded-lg border border-zinc-200 p-3 dark:border-zinc-800">
-                <p className="text-sm font-medium">{doc.filename}</p>
+              <div key={doc.index} className="rounded-xl border border-zinc-200 p-3 dark:border-zinc-800">
+                <p className="truncate text-sm font-medium">{doc.filename}</p>
                 <p className="mb-2 text-xs text-zinc-500">{doc.docType} · {(doc.classConfidence * 100).toFixed(0)}% confidence</p>
                 {doc.extraction && (
                   <div className="overflow-x-auto">
                     <table className="w-full text-sm">
+                      <caption className="sr-only">Fields extracted from {doc.filename}</caption>
                       <tbody>
                         {Object.entries(doc.extraction).filter(([, v]) => typeof v === "object" && v.found).map(([k, v]) => {
                           const f = v as { value: string; confidence: number };
                           return (
                             <tr key={k} className="border-t border-zinc-100 dark:border-zinc-800">
-                              <td className="py-1 pr-3 text-zinc-500">{k.replace(/_/g, " ")}</td>
+                              <th scope="row" className="py-1 pr-3 text-left font-normal text-zinc-500">{k.replace(/_/g, " ")}</th>
                               <td className="py-1 pr-3">{f.value}</td>
-                              <td className={`py-1 text-right text-xs ${f.confidence < 0.7 ? "text-amber-600" : "text-zinc-500"}`}>{(f.confidence * 100).toFixed(0)}%</td>
+                              <td className={cx("py-1 text-right text-xs tabular-nums", f.confidence < 0.7 ? "text-amber-600" : "text-zinc-500")}>{(f.confidence * 100).toFixed(0)}%</td>
                             </tr>
                           );
                         })}
@@ -242,7 +215,7 @@ function Result({ r, card }: { r: PipelineResult; card: string }) {
               </div>
             ))}
           </div>
-        </div>
+        </Card>
       )}
     </>
   );
@@ -250,13 +223,13 @@ function Result({ r, card }: { r: PipelineResult; card: string }) {
 
 function CheckList({ checks }: { checks: Check[] }) {
   return (
-    <ul className="flex flex-col gap-2">
+    <ul className="flex flex-col gap-2.5">
       {checks.map((c, i) => (
         <li key={i} className="flex items-start gap-3 text-sm">
-          <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${STATUS_DOT[c.status]}`} />
+          <span className={cx("mt-1.5 h-2 w-2 shrink-0 rounded-full", STATUS_DOT[c.status])} aria-hidden />
           <div>
-            <span className="mr-2 rounded bg-zinc-100 px-1.5 py-0.5 text-xs text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400">{c.step}</span>
-            {c.message}
+            <Badge className="mr-2">{c.step}</Badge>
+            <span className="sr-only">{c.status}: </span>{c.message}
             {c.category !== "info" && <span className="ml-2 text-xs text-zinc-500">({c.category === "integrity" ? "needs reviewer" : "customer can fix"})</span>}
           </div>
         </li>
