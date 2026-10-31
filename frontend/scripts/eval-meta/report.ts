@@ -14,6 +14,7 @@ export interface DocResult {
   classPass: boolean | null;
   extractionCached: boolean | null;
   fields: FieldScore[];
+  overlay?: string; // link relative to the report directory
 }
 
 export interface CaseResult {
@@ -47,6 +48,10 @@ export interface RunInfo {
   preflight: string;
 }
 
+export const isIdentity = (docType: string) => ["passport", "drivers_license", "national_id"].includes(docType);
+const pctNum = (n: number) => `${n >= 0 ? "+" : ""}${n.toFixed(1)}%`;
+const ratio = (n: number | null) => (n === null ? "–" : `${n.toFixed(2)}×`);
+const diag = (f: FieldScore) => (f.diagnostics ? `${pctNum(f.diagnostics.dxPct)} / ${pctNum(f.diagnostics.dyPct)} | ${ratio(f.diagnostics.widthRatio)} / ${ratio(f.diagnostics.heightRatio)}` : "– | –");
 const yn = (v: boolean | null) => (v === null ? "–" : v ? "✓" : "✗");
 const esc = (s: string) => s.replace(/\|/g, "\\|").replace(/\n/g, " ");
 
@@ -71,6 +76,8 @@ export function writeReport(dir: string, run: RunInfo, cases: CaseResult[], call
   md.push(`Run ${run.startedAt} → ${run.finishedAt} · model \`${run.model}\``, "");
   md.push("## Rules and settings", "");
   md.push(`- **Box rule:** ${BOX_RULE}`);
+  md.push(`- **Box diagnostics (failed boxes only):** centre offset dx / dy of the model box from the truth box, in percent of the 0-1000 grid (positive = right / down), and size ratio width / height (model ÷ truth).`);
+  md.push(`- **Overlays:** each document heading links to a page with model boxes in red and truth boxes in green.`);
   md.push(`- **Value rule:** ${VALUE_RULE}`);
   md.push(`- **Classification:** \`classifyDocument\` compared with truth.document_type for every document.`);
   md.push(`- **Reasoning effort used:** ${Object.entries(run.reasoningEffort).map(([k, v]) => `${k}=${v}`).join(", ")}`);
@@ -90,6 +97,10 @@ export function writeReport(dir: string, run: RunInfo, cases: CaseResult[], call
   md.push(`| Classification correct | ${pct(classified.filter((d) => d.classPass).length, classified.length)} |`);
   md.push(`| Field values correct (present in truth) | ${pct(present.filter((f) => f.valuePass).length, present.length)} |`);
   md.push(`| Boxes passing (present in truth) | ${pct(present.filter((f) => f.boxPass).length, present.length)} |`);
+  for (const [label, isId] of [["ID documents", true], ["Bills", false]] as const) {
+    const fs_ = cases.flatMap((c) => c.docs).filter((d) => isIdentity(d.truthType) === isId).flatMap((d) => d.fields).filter((f) => f.truthFound);
+    md.push(`| Boxes passing: ${label} | ${pct(fs_.filter((f) => f.boxPass).length, fs_.length)} |`);
+  }
   md.push(`| Absent fields reported absent | ${pct(fields.filter((f) => !f.truthFound && f.pass).length, fields.filter((f) => !f.truthFound).length)} |`);
   md.push(`| Dates returned as YYYY-MM-DD | ${pct(dates.filter((f) => f.isoFormat).length, dates.length)} |`);
   md.push(`| Live calls / cached | ${t.live} / ${t.cached} |`);
@@ -108,13 +119,13 @@ export function writeReport(dir: string, run: RunInfo, cases: CaseResult[], call
   md.push("## Documents and fields", "");
   for (const c of cases)
     for (const d of c.docs) {
-      md.push(`### ${d.doc}`, "");
+      md.push(`### ${d.overlay ? `[${d.doc}](${d.overlay})` : d.doc}`, "");
       md.push(`Classification: predicted \`${d.predictedType ?? "not run"}\`, truth \`${d.truthType}\` ${yn(d.classPass)} · extraction ${d.extractionCached === null ? "not run" : d.extractionCached ? "**cached**" : "live"}`, "");
       if (!d.fields.length) continue;
-      md.push(`| Field | Truth (normalized) | Model value | Value | YYYY-MM-DD | IoU | Centre in | Box | Pass |`);
-      md.push(`|---|---|---|---|---|---|---|---|---|`);
+      md.push(`| Field | Truth (normalized) | Model value | Value | YYYY-MM-DD | IoU | Centre in | Box | Offset dx / dy | Size w / h | Pass |`);
+      md.push(`|---|---|---|---|---|---|---|---|---|---|---|`);
       for (const f of d.fields)
-        md.push(`| ${f.field} | ${esc(f.truthFound ? f.truth : "(absent)")} | ${esc(f.modelFound ? f.model : "(absent)")} | ${yn(f.valuePass)} | ${yn(f.isoFormat)} | ${f.iou === null ? "–" : f.iou.toFixed(2)} | ${yn(f.centreInside)} | ${yn(f.boxPass)} | ${yn(f.pass)} |`);
+        md.push(`| ${f.field} | ${esc(f.truthFound ? f.truth : "(absent)")} | ${esc(f.modelFound ? f.model : "(absent)")} | ${yn(f.valuePass)} | ${yn(f.isoFormat)} | ${f.iou === null ? "–" : f.iou.toFixed(2)} | ${yn(f.centreInside)} | ${yn(f.boxPass)} | ${diag(f)} | ${yn(f.pass)} |`);
       md.push("");
     }
 

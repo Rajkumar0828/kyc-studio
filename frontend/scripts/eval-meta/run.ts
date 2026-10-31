@@ -5,6 +5,7 @@
 //   npx tsx --env-file=.env.local scripts/eval-meta/run.ts --yes    # make the calls
 //
 // Flags: --yes  --max-calls N (80)  --cases a,b  --no-cache  --refresh  --no-count
+//        --overlays-from <reportDir>   rebuild overlay pages from a report's results.json (no API)
 //        --effort-classify X  --effort-extract X  --effort-other X
 //        --price-input N  --price-cached N  --price-output N   (USD per 1M tokens)
 import fs from "node:fs";
@@ -23,7 +24,8 @@ import type { Check } from "../../src/lib/pipeline/types";
 import { latestPublished } from "../../src/lib/policy/store";
 import { CallCapReached, createEvalCall, sha256, type CallRecord } from "./cache";
 import { COUNT_DISCLOSURE, createCounter, DEFAULT_PRICES, planCase, usdOf, type CaseForPlan, type PlannedCall, type Prices } from "./estimate";
-import { writeReport, type CaseResult, type DocResult, type FailureType } from "./report";
+import { overlayName, writeOverlay } from "./overlays";
+import { writeReport, type CaseResult, type DocResult, type FailureType, type RunInfo } from "./report";
 import { scoreField, type ModelField, type TruthField } from "./score";
 
 const REPO = path.resolve(__dirname, "..", "..", "..");
@@ -68,6 +70,39 @@ const providerOpts: MetaProviderOptions = {
     ...(eOther && { compare: eOther, summary: eOther, guidance: eOther }),
   },
 };
+
+// Overlay pages for every scored document, linked from the report (no API calls).
+function addOverlays(dir: string, run: Pick<RunInfo, "model" | "reasoningEffort">, cases: CaseResult[]) {
+  let n = 0;
+  for (const c of cases)
+    for (const d of c.docs) {
+      if (!d.fields.some((f) => f.truthBox || f.modelBox)) continue; // nothing to draw (not extracted, or an older report)
+      const name = overlayName(d.doc);
+      writeOverlay({
+        htmlFile: path.join(dir, "overlays", name),
+        imageFile: path.join(SPECIMENS, d.doc),
+        title: d.doc,
+        subtitle: [`case ${c.caseId}`, `predicted ${d.predictedType ?? "not classified"}, truth ${d.truthType}`, `model ${run.model}`, `extraction effort ${run.reasoningEffort.extraction}`],
+        fields: d.fields,
+      });
+      d.overlay = `overlays/${encodeURIComponent(name)}`;
+      n++;
+    }
+  return n;
+}
+
+const overlaysFrom = opt("overlays-from");
+if (overlaysFrom) {
+  const dir = path.resolve(overlaysFrom);
+  const saved = JSON.parse(fs.readFileSync(path.join(dir, "results.json"), "utf8")) as { run: RunInfo; cases: CaseResult[] };
+  const calls = fs.existsSync(path.join(dir, "calls.jsonl"))
+    ? fs.readFileSync(path.join(dir, "calls.jsonl"), "utf8").split(/\r?\n/).filter(Boolean).map((l) => JSON.parse(l) as CallRecord)
+    : [];
+  const n = addOverlays(dir, saved.run, saved.cases);
+  writeReport(dir, saved.run, saved.cases, calls);
+  console.log(n ? `Wrote ${n} overlay pages to ${path.join(dir, "overlays")} and relinked report.md.` : "No documents with boxes in this report (it may predate overlays).");
+  process.exit(0);
+}
 
 // ---- provider guard: Meta only, never the mock or its specimen shortcut ----
 const requested = process.env.AI_PROVIDER;
@@ -277,12 +312,14 @@ async function main() {
   }
 
   const dir = path.join(REPORTS, startedAt.replace(/[:.]/g, "-"));
-  const t = writeReport(dir, {
+  const runInfo: RunInfo = {
     startedAt, finishedAt: new Date().toISOString(), model: settings.model,
     reasoningEffort: settings.reasoningEffort, maxCompletionTokens: settings.maxCompletionTokens, prices, maxCalls,
     cache: useCache ? (refresh ? "refresh: hits ignored, responses rewritten" : `on (${path.relative(REPO, CACHE)})`) : "off",
     counting: { ...counter.stats(), enabled: counting }, guard, preflight,
-  }, results, records);
+  };
+  addOverlays(dir, runInfo, results);
+  const t = writeReport(dir, runInfo, results, records);
   console.log(`\nLive calls ${t.live}, cached ${t.cached}; tokens in ${t.input} / out ${t.output} / reasoning ${t.reasoning}; cost $${t.usd.toFixed(4)}.`);
   console.log(`Report: ${path.relative(process.cwd(), path.join(dir, "report.md"))}\n`);
   if (stopped) process.exitCode = 4;

@@ -1,7 +1,7 @@
 // Offline tests for the Meta eval's scoring rules. No API calls.
 // Usage: npx tsx scripts/eval-score-test.ts
 import assert from "node:assert/strict";
-import { centreInside, iou, isIsoFormat, MIN_IOU, normText, parseDate, scoreBox, scoreField, type Box, type TruthField } from "./eval-meta/score";
+import { boxDiagnostics, centreInside, iou, isIsoFormat, MIN_IOU, normText, parseDate, scoreBox, scoreField, type Box, type TruthField } from "./eval-meta/score";
 
 let failed = 0;
 function test(name: string, fn: () => void) {
@@ -94,6 +94,25 @@ test("scoreField: model misses a field that exists", () => {
   const s = scoreField("full_name", { found: false, value: "", box: [0, 0, 0, 0] }, TRUTH_NAME);
   assert.equal(s.pass, false);
   assert.equal(s.boxPass, false);
+});
+
+test("diagnostics: centre offset in percent of the grid and size ratios", () => {
+  const d = boxDiagnostics([110, 220, 130, 280], [100, 200, 140, 240]);
+  assert.equal(d.dxPct, 0); // centres 120 vs 120
+  assert.equal(d.dyPct, 3); // centres 250 vs 220 -> 30 grid units = 3%
+  assert.equal(d.widthRatio, 0.5);
+  assert.equal(d.heightRatio, 1.5);
+});
+
+test("scoreField: diagnostics only for failed boxes the model returned", () => {
+  const passed = scoreField("full_name", { found: true, value: "ELIN THORNQUIST", box: [335, 268, 552, 306] }, TRUTH_NAME);
+  assert.equal(passed.diagnostics, null);
+  const failedBox = scoreField("full_name", { found: true, value: "ELIN THORNQUIST", box: [600, 600, 700, 650] }, TRUTH_NAME);
+  assert.ok(failedBox.diagnostics && failedBox.diagnostics.dxPct > 0 && failedBox.diagnostics.dyPct > 0);
+  assert.deepEqual(failedBox.modelBox, [600, 600, 700, 650]);
+  assert.deepEqual(failedBox.truthBox, TRUTH_NAME.box);
+  const missing = scoreField("full_name", { found: false, value: "", box: [0, 0, 0, 0] }, TRUTH_NAME);
+  assert.equal(missing.diagnostics, null);
 });
 
 console.log(failed ? `\n${failed} failed` : "\nall passed");

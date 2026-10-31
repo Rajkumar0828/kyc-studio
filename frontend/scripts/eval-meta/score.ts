@@ -24,6 +24,26 @@ export function centreInside(model: Box, truth: Box): boolean {
   return cx >= truth[0] && cx <= truth[2] && cy >= truth[1] && cy <= truth[3];
 }
 
+// Where a failed box sits relative to the truth box: centre offset as a percent of
+// the 0-1000 grid (positive = right/down) and size ratio (model / truth).
+export interface BoxDiagnostics {
+  dxPct: number;
+  dyPct: number;
+  widthRatio: number | null; // null when the truth box has no width
+  heightRatio: number | null;
+}
+
+export function boxDiagnostics(model: Box, truth: Box): BoxDiagnostics {
+  const cx = (b: Box) => (b[0] + b[2]) / 2, cy = (b: Box) => (b[1] + b[3]) / 2;
+  const w = (b: Box) => b[2] - b[0], h = (b: Box) => b[3] - b[1];
+  return {
+    dxPct: (cx(model) - cx(truth)) / 10,
+    dyPct: (cy(model) - cy(truth)) / 10,
+    widthRatio: w(truth) > 0 ? w(model) / w(truth) : null,
+    heightRatio: h(truth) > 0 ? h(model) / h(truth) : null,
+  };
+}
+
 export function scoreBox(model: Box, truth: Box) {
   const v = iou(model, truth);
   const centre = centreInside(model, truth);
@@ -82,10 +102,16 @@ export interface FieldScore {
   centreInside: boolean | null;
   boxPass: boolean | null; // null when there is no box to score
   pass: boolean;
+  modelBox: Box | null;
+  truthBox: Box | null;
+  diagnostics: BoxDiagnostics | null; // only for failed boxes the model did return
 }
 
 export function scoreField(field: string, model: ModelField | undefined, truth: TruthField): FieldScore {
-  const base = { field, truthFound: truth.found, modelFound: !!model?.found, truth: truth.normalized, model: model?.found ? model.value : "" };
+  const base = {
+    field, truthFound: truth.found, modelFound: !!model?.found, truth: truth.normalized, model: model?.found ? model.value : "",
+    modelBox: model?.found ? model.box : null, truthBox: truth.found ? truth.box : null, diagnostics: null,
+  };
   // Absent in truth: correct only if the model also says absent.
   if (!truth.found) {
     const ok = !model?.found;
@@ -96,5 +122,8 @@ export function scoreField(field: string, model: ModelField | undefined, truth: 
   const date = DATE_FIELDS.has(field);
   const valuePass = date ? parseDate(model.value) === truth.normalized : normText(model.value) === normText(truth.normalized);
   const box = scoreBox(model.box, truth.box);
-  return { ...base, valuePass, isoFormat: date ? isIsoFormat(model.value) : null, iou: box.iou, centreInside: box.centreInside, boxPass: box.pass, pass: valuePass && box.pass };
+  return {
+    ...base, valuePass, isoFormat: date ? isIsoFormat(model.value) : null, iou: box.iou, centreInside: box.centreInside, boxPass: box.pass,
+    pass: valuePass && box.pass, diagnostics: box.pass ? null : boxDiagnostics(model.box, truth.box),
+  };
 }
