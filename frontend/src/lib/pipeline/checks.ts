@@ -29,12 +29,14 @@ export function ruleChecks(docs: ProcessedDoc[], policy: PolicySpec, asOf: Date 
     if (!x) continue;
     const ev = (field: keyof typeof x) => ({ docIndex: d.index, field: String(field), box: (x[field] as { box: number[] }).box });
 
+    const identity = IDENTITY_DOCS.includes(d.docType);
     for (const [k, v] of Object.entries(x)) {
+      if (k === "expiry_date" && !identity) continue; // only identity documents have an expiry date
       if (typeof v === "object" && v.found && v.confidence < LOW_CONFIDENCE)
         add({ code: "low_confidence", status: "warn", category: "customer_fixable", message: `${d.filename}: ${k} was hard to read.`, evidence: ev(k as keyof typeof x) });
     }
 
-    if (IDENTITY_DOCS.includes(d.docType)) {
+    if (identity) {
       const exp = parseDate(x.expiry_date.value);
       if (!exp) add({ code: "expiry_unreadable", status: "warn", category: "customer_fixable", message: `${d.filename}: expiry date missing or not a valid date.`, evidence: ev("expiry_date") });
       else if (exp < today) add({ code: "document_expired", status: "fail", category: "customer_fixable", message: `${d.filename}: document expired on ${x.expiry_date.value}.`, evidence: ev("expiry_date") });

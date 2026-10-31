@@ -119,7 +119,10 @@ export const META_PROMPTS = {
   extraction: (docType: string) =>
     `This is a ${docType}. For each field return found, the exact text as printed, confidence 0-1, and box as ` +
     "[x_min, y_min, x_max, y_max] on a normalized 0-1000 grid with (0,0) at top-left. Dates as YYYY-MM-DD. " +
-    'If a field is absent set found=false, value="", confidence=0, box=[0,0,0,0].',
+    'If a field is absent set found=false, value="", confidence=0, box=[0,0,0,0]. ' +
+    "expiry_date applies only to identity documents (passport, driver's license, national ID). For any other document, " +
+    "including utility bills and bank statements, return expiry_date with found=false; never use a payment due date, " +
+    "billing period or statement date as expiry_date.",
   compare: (field: string, a: string, b: string) =>
     `Do these two ${field} values from different KYC documents refer to the same thing? Allow formatting, ` +
     `abbreviation and transliteration differences only.\nA: ${a}\nB: ${b}`,
