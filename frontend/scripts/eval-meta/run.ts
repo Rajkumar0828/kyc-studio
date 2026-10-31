@@ -6,7 +6,8 @@
 //
 // Flags: --yes  --max-calls N (80)  --cases a,b  --no-cache  --refresh  --no-count
 //        --overlays-from <reportDir>   rebuild overlay pages from a report's results.json (no API)
-//        --effort-classify X  --effort-extract X  --effort-other X
+//        --extract-only  --repeat N    repeatability experiment: extraction only, N repeats per effort
+//        --effort-classify X  --effort-extract X[,Y]  --effort-other X   (a list only with --extract-only)
 //        --price-input N  --price-cached N  --price-output N   (USD per 1M tokens)
 import fs from "node:fs";
 import path from "node:path";
@@ -21,9 +22,11 @@ import type { InputFile } from "../../src/lib/ai/types";
 import { qualityProblems } from "../../src/lib/pipeline/quality";
 import { runPipeline } from "../../src/lib/pipeline/run";
 import type { Check } from "../../src/lib/pipeline/types";
+import type { DocType, PolicySpec } from "../../src/lib/policy/schema";
 import { latestPublished } from "../../src/lib/policy/store";
 import { CallCapReached, createEvalCall, sha256, type CallRecord } from "./cache";
 import { COUNT_DISCLOSURE, createCounter, DEFAULT_PRICES, planCase, usdOf, type CaseForPlan, type PlannedCall, type Prices } from "./estimate";
+import { planExtractOnly, uniqueDocs, writeExperimentReport, type RepeatRun } from "./experiment";
 import { overlayName, writeOverlay } from "./overlays";
 import { writeReport, type CaseResult, type DocResult, type FailureType, type RunInfo } from "./report";
 import { scoreField, type ModelField, type TruthField } from "./score";
@@ -62,7 +65,14 @@ const effort = (name: string): ReasoningEffort | undefined => {
 const yes = flag("yes"), useCache = !flag("no-cache"), refresh = flag("refresh"), counting = !flag("no-count");
 const maxCalls = num("max-calls", 80);
 const prices: Prices = { input: num("price-input", DEFAULT_PRICES.input), cachedInput: num("price-cached", DEFAULT_PRICES.cachedInput), output: num("price-output", DEFAULT_PRICES.output) };
-const eClassify = effort("effort-classify"), eExtract = effort("effort-extract"), eOther = effort("effort-other");
+const extractOnly = flag("extract-only");
+const repeat = num("repeat", 1);
+if (!Number.isInteger(repeat) || repeat < 1) die("--repeat must be a whole number of at least 1");
+if (repeat > 1 && !extractOnly) die("--repeat needs --extract-only");
+const extractEfforts = (opt("effort-extract") ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+for (const e of extractEfforts) if (!(REASONING_EFFORTS as readonly string[]).includes(e)) die(`--effort-extract values must be among ${REASONING_EFFORTS.join(", ")}`);
+if (extractEfforts.length > 1 && !extractOnly) die("Several --effort-extract values need --extract-only");
+const eClassify = effort("effort-classify"), eExtract = extractEfforts[0] as ReasoningEffort | undefined, eOther = effort("effort-other");
 const providerOpts: MetaProviderOptions = {
   reasoningEffort: {
     ...(eClassify && { doc_class: eClassify }),
@@ -104,6 +114,39 @@ if (overlaysFrom) {
   process.exit(0);
 }
 
+// Tiny call proving reasoning_effort works with a strict json_schema on Chat
+// Completions; Meta's docs do not document the combination.
+function preflightRequest(model: string, effortValue: ReasoningEffort, maxTokens: number): ChatRequest {
+  return {
+    model,
+    messages: [{ role: "user", content: "Return ok=true and nums=[1,2]." }],
+    response_format: {
+      type: "json_schema",
+      json_schema: {
+        name: "preflight", strict: true,
+        schema: { type: "object", properties: { ok: { type: "boolean" }, nums: { type: "array", items: { type: "integer" }, minItems: 2, maxItems: 2 } }, required: ["ok", "nums"], additionalProperties: false },
+      },
+    },
+    reasoning_effort: effortValue,
+    max_completion_tokens: maxTokens,
+  };
+}
+
+async function runPreflight(evalCall: ReturnType<typeof createEvalCall>, body: ChatRequest, records: CallRecord[]): Promise<string> {
+  try {
+    const res = await evalCall.callStep("preflight", body, sendChatCompletion);
+    if (res.finishReason === "length") throw new Error("finish_reason=length");
+    const v = JSON.parse(res.content ?? "") as { ok?: unknown; nums?: unknown };
+    if (v.ok !== true || !Array.isArray(v.nums) || v.nums.length !== 2) throw new Error(`unexpected output ${JSON.stringify(v).slice(0, 120)}`);
+    const msg = `reasoning_effort=${body.reasoning_effort} with a strict json_schema (incl. minItems/maxItems) returned valid output${records.at(-1)?.cached ? " (cached result)" : ""}.`;
+    console.log(`Preflight OK: ${msg}`);
+    return msg;
+  } catch (e) {
+    die(`Preflight failed: Chat Completions with reasoning_effort=${body.reasoning_effort} and a strict json_schema did not work (${e instanceof Error ? e.message.slice(0, 200) : e}). ` +
+      "The eval was not run. Check the effort value or Meta's docs before retrying.", 3);
+  }
+}
+
 // ---- provider guard: Meta only, never the mock or its specimen shortcut ----
 const requested = process.env.AI_PROVIDER;
 if (requested && requested !== "meta") die(`AI_PROVIDER is "${requested}". This eval only runs against the Meta provider; unset AI_PROVIDER or set it to meta. Refusing to run.`);
@@ -125,7 +168,15 @@ interface CaseFile {
 }
 interface TruthFile {
   document_type: string;
+  defects: string[];
   fields: Record<string, TruthField>;
+}
+interface LoadedCase {
+  cf: CaseFile;
+  policy: PolicySpec;
+  docs: Array<{ name: string; file: InputFile; documentType: string; truth: Record<string, TruthField>; defects: string[] }>;
+  selfie: InputFile | undefined;
+  qualityChecks: Check[];
 }
 
 async function main() {
@@ -141,7 +192,7 @@ async function main() {
   if (!selected.length) die("No cases selected.");
 
   const docName = new Map<string, string>(); // file hash -> "case/file.png"
-  const loaded = [];
+  const loaded: LoadedCase[] = [];
   for (const entry of selected) {
     const cf = readJson<CaseFile>(`${entry.case_id}/case.json`);
     const policy = await latestPublished(cf.policy_id);
@@ -151,7 +202,7 @@ async function main() {
       docName.set(sha256(bytes), f.file);
       const truth = readJson<TruthFile>(f.truth!);
       const file: InputFile = { filename: path.basename(f.file), mime: "image/png", bytes };
-      return { name: f.file, file, documentType: truth.document_type, truth: truth.fields };
+      return { name: f.file, file, documentType: truth.document_type, truth: truth.fields, defects: truth.defects ?? [] };
     });
     const selfieEntry = entry.files.find((f) => f.role === "selfie");
     const selfie: InputFile | undefined = selfieEntry ? { filename: path.basename(selfieEntry.file), mime: "image/png", bytes: read(selfieEntry.file) } : undefined;
@@ -172,29 +223,30 @@ async function main() {
   // ---- plan and estimate ----
   const records: CallRecord[] = [];
   let currentCase = "preflight";
+  let currentRepeat: number | undefined;
   const evalCall = createEvalCall({
     cacheDir: CACHE, useCache, refresh, maxCalls,
     caseId: () => currentCase,
+    repeat: () => currentRepeat,
     docFor: (h) => docName.get(h) ?? null,
     onRecord: (r) => records.push(r),
   });
   const counter = createCounter(path.join(CACHE, "counts"));
 
+  if (extractOnly) {
+    await extractOnlyRun({
+      loaded, settings, guard, records, evalCall, counter, startedAt,
+      setContext: (caseId, r) => {
+        currentCase = caseId;
+        currentRepeat = r;
+      },
+    });
+    return;
+  }
+
   const plans: PlannedCall[] = loaded.flatMap((l) =>
     planCase({ caseId: l.cf.case_id, policy: l.policy, expectedDecision: l.cf.expected.decision, expectedCodes: l.cf.expected.flag_codes, docs: l.docs, qualityChecks: l.qualityChecks } satisfies CaseForPlan, providerOpts));
-  const preflightBody: ChatRequest = {
-    model: settings.model,
-    messages: [{ role: "user", content: "Return ok=true and nums=[1,2]." }],
-    response_format: {
-      type: "json_schema",
-      json_schema: {
-        name: "preflight", strict: true,
-        schema: { type: "object", properties: { ok: { type: "boolean" }, nums: { type: "array", items: { type: "integer" }, minItems: 2, maxItems: 2 } }, required: ["ok", "nums"], additionalProperties: false },
-      },
-    },
-    reasoning_effort: settings.reasoningEffort.extraction,
-    max_completion_tokens: settings.maxCompletionTokens.compare,
-  };
+  const preflightBody = preflightRequest(settings.model, settings.reasoningEffort.extraction, settings.maxCompletionTokens.compare);
 
   console.log(`\nMeta eval · model ${settings.model}`);
   console.log(`Reasoning effort: ${Object.entries(settings.reasoningEffort).map(([k, v]) => `${k}=${v}`).join(", ")}`);
@@ -236,19 +288,7 @@ async function main() {
     return;
   }
 
-  // ---- preflight: reasoning_effort + strict json_schema on Chat Completions is not documented together ----
-  let preflight: string;
-  try {
-    const res = await evalCall.callStep("preflight", preflightBody, sendChatCompletion);
-    if (res.finishReason === "length") throw new Error("finish_reason=length");
-    const v = JSON.parse(res.content ?? "") as { ok?: unknown; nums?: unknown };
-    if (v.ok !== true || !Array.isArray(v.nums) || v.nums.length !== 2) throw new Error(`unexpected output ${JSON.stringify(v).slice(0, 120)}`);
-    preflight = `reasoning_effort=${preflightBody.reasoning_effort} with a strict json_schema (incl. minItems/maxItems) returned valid output${records.at(-1)?.cached ? " (cached result)" : ""}.`;
-    console.log(`\nPreflight OK: ${preflight}`);
-  } catch (e) {
-    die(`Preflight failed: Chat Completions with reasoning_effort=${preflightBody.reasoning_effort} and a strict json_schema did not work (${e instanceof Error ? e.message.slice(0, 200) : e}). ` +
-      "The eval was not run. Check the effort value or Meta's docs before retrying.", 3);
-  }
+  const preflight = await runPreflight(evalCall, preflightBody, records);
 
   // ---- run cases ----
   const results: CaseResult[] = [];
@@ -322,6 +362,130 @@ async function main() {
   const t = writeReport(dir, runInfo, results, records);
   console.log(`\nLive calls ${t.live}, cached ${t.cached}; tokens in ${t.input} / out ${t.output} / reasoning ${t.reasoning}; cost $${t.usd.toFixed(4)}.`);
   console.log(`Report: ${path.relative(process.cwd(), path.join(dir, "report.md"))}\n`);
+  if (stopped) process.exitCode = 4;
+}
+
+// ---- repeatability experiment: --extract-only [--repeat N] [--effort-extract a,b] ----
+async function extractOnlyRun(ctx: {
+  loaded: LoadedCase[];
+  settings: ReturnType<typeof metaSettings>;
+  guard: string[];
+  records: CallRecord[];
+  evalCall: ReturnType<typeof createEvalCall>;
+  counter: ReturnType<typeof createCounter>;
+  startedAt: string;
+  setContext: (caseId: string, repeat: number | undefined) => void;
+}) {
+  const { settings, records, evalCall, counter } = ctx;
+  const efforts = (extractEfforts.length ? extractEfforts : [settings.reasoningEffort.extraction]) as ReasoningEffort[];
+  const docs = uniqueDocs(ctx.loaded.flatMap((l) => l.docs));
+  const plan = planExtractOnly(docs, efforts, repeat, providerOpts);
+  const preflights = efforts.map((e) => preflightRequest(settings.model, e, settings.maxCompletionTokens.compare));
+
+  console.log(`\nMeta extraction repeatability · model ${settings.model}`);
+  console.log(`${docs.length} unique documents × ${repeat} repeats × efforts ${efforts.join(", ")} (truth document_type passed in; no classification)`);
+  console.log(`max_completion_tokens: extraction=${settings.maxCompletionTokens.extraction}, preflight=${settings.maxCompletionTokens.compare}`);
+  console.log(`Prices per 1M tokens: input $${prices.input}, cached input $${prices.cachedInput}, output $${prices.output}`);
+  console.log(`Cache: ${useCache ? (refresh ? "refresh (ignore hits, rewrite)" : "on") : "off"}; the repeat index is part of the cache key · cap: ${maxCalls} live calls`);
+  console.log(`Token counting: ${counting ? "Responses-format input_tokens endpoint (approximate; one count per document and effort, shared by repeats)" : "off (--no-count)"}`);
+  if (counting) console.log(COUNT_DISCLOSURE);
+  console.log("");
+
+  // Estimate per (effort, document): repeats share one token count.
+  let liveCount = 0, estInput = 0, worst = 0, uncounted = 0;
+  console.log("Effort   Document                    Repeats  Cached  Est. input  Max output  Worst $ (not cached)");
+  for (const [i, body] of preflights.entries()) {
+    const cached = evalCall.isCached(body);
+    const tokens = cached || !counting ? null : (await counter.count(body)).tokens;
+    if (!cached) {
+      liveCount++;
+      if (tokens === null) uncounted++;
+      estInput += tokens ?? 0;
+      worst += usdOf(prices, tokens ?? 0, 0, body.max_completion_tokens);
+    }
+    console.log(`${efforts[i].padEnd(8)} ${"(preflight)".padEnd(27)} ${"1".padStart(7)}  ${(cached ? "1" : "0").padStart(6)}  ${String(tokens ?? "–").padStart(10)}  ${String(body.max_completion_tokens).padStart(10)}  ${cached ? "0.0000" : usdOf(prices, tokens ?? 0, 0, body.max_completion_tokens).toFixed(4)}`);
+  }
+  for (const effortValue of efforts)
+    for (const d of docs) {
+      const mine = plan.filter((p) => p.effort === effortValue && p.doc === d.name);
+      const notCached = mine.filter((p) => !evalCall.isCached(p.body, p.repeat));
+      const tokens = !notCached.length || !counting ? null : (await counter.count(mine[0].body)).tokens;
+      const cost = notCached.length * usdOf(prices, tokens ?? 0, 0, mine[0].body.max_completion_tokens);
+      liveCount += notCached.length;
+      if (tokens === null) uncounted += notCached.length;
+      estInput += (tokens ?? 0) * notCached.length;
+      worst += cost;
+      console.log(`${effortValue.padEnd(8)} ${d.name.padEnd(27)} ${String(mine.length).padStart(7)}  ${String(mine.length - notCached.length).padStart(6)}  ${String(tokens ?? "–").padStart(10)}  ${String(mine[0].body.max_completion_tokens).padStart(10)}  ${cost.toFixed(4)}`);
+    }
+  const total = plan.length + preflights.length;
+  console.log(`\nPlanned calls: ${total} (${liveCount} not cached, ${total - liveCount} cached): ${plan.length} extractions + ${preflights.length} preflight.`);
+  console.log(`Estimated input tokens (not cached): ${estInput}${uncounted ? ` (+${uncounted} calls not counted)` : ""}.`);
+  console.log(`Worst-case cost of non-cached calls (input + full max_completion_tokens as output${uncounted ? "; uncounted calls priced on output only" : ""}): $${worst.toFixed(4)}.`);
+  const cs = counter.stats();
+  console.log(`Token-counting requests this run: ${cs.live} live, ${cs.cached} from cache.`);
+  if (liveCount > maxCalls) die(`The plan needs ${liveCount} live calls but --max-calls is ${maxCalls}. Raise the cap or use fewer repeats or efforts.`);
+  if (!yes) {
+    console.log("\nNo calls made yet. Re-run with --yes to run the experiment.\n");
+    return;
+  }
+
+  ctx.setContext("preflight", undefined);
+  const preflightNotes: string[] = [];
+  for (const body of preflights) preflightNotes.push(await runPreflight(evalCall, body, records));
+
+  const runs: RepeatRun[] = [];
+  let stopped = false;
+  for (const effortValue of efforts) {
+    const provider = createMetaProvider({ ...providerOpts, reasoningEffort: { ...providerOpts.reasoningEffort, extraction: effortValue }, call: evalCall.call });
+    for (let r = 0; r < repeat && !stopped; r++) {
+      const run: RepeatRun = { effort: effortValue, repeat: r, docs: [], failures: [] };
+      runs.push(run);
+      for (const d of docs) {
+        ctx.setContext(`extract-${effortValue}-r${r}`, r);
+        const before = records.length;
+        try {
+          const x = (await provider.extractFields(d.file, d.documentType as DocType)) as unknown as Record<string, ModelField>;
+          run.docs.push({
+            doc: d.name, truthType: d.documentType, predictedType: null, classPass: null,
+            extractionCached: records[before]?.cached ?? null,
+            fields: FIELDS.map((f) => scoreField(f, x[f], d.truth[f])),
+          });
+        } catch (e) {
+          const type: FailureType = e instanceof MetaOutputTruncated ? "length" : e instanceof CallCapReached ? "cap" : e instanceof ZodError || e instanceof SyntaxError ? "invalid_output" : "model_error";
+          run.failures.push({ doc: d.name, type, message: e instanceof Error ? e.message.slice(0, 300) : String(e).slice(0, 300) });
+          if (type === "cap") {
+            stopped = true;
+            break;
+          }
+        }
+      }
+      console.log(`  effort ${effortValue} repeat ${r}: ${run.docs.length} extracted, ${run.failures.length} failed`);
+    }
+  }
+
+  const dir = path.join(REPORTS, `${ctx.startedAt.replace(/[:.]/g, "-")}-extract`);
+  const runInfo: RunInfo = {
+    startedAt: ctx.startedAt, finishedAt: new Date().toISOString(), model: settings.model,
+    reasoningEffort: { ...settings.reasoningEffort, extraction: efforts.join(",") as ReasoningEffort },
+    maxCompletionTokens: settings.maxCompletionTokens, prices, maxCalls,
+    cache: useCache ? (refresh ? "refresh: hits ignored, responses rewritten" : `on (${path.relative(REPO, CACHE)})`) : "off",
+    counting: { ...counter.stats(), enabled: counting }, guard: ctx.guard, preflight: preflightNotes.join(" "),
+    experiment: { efforts, repeat, documents: docs.length },
+  };
+  for (const run of runs)
+    for (const d of run.docs) {
+      const name = overlayName(d.doc, `_${run.effort}_r${run.repeat}`);
+      writeOverlay({
+        htmlFile: path.join(dir, "overlays", name), imageFile: path.join(SPECIMENS, d.doc), title: d.doc,
+        subtitle: [`truth ${d.truthType}`, `model ${settings.model}`, `extraction effort ${run.effort}`, `repeat ${run.repeat}`], fields: d.fields,
+      });
+      d.overlay = `overlays/${encodeURIComponent(name)}`;
+    }
+  const summaries = writeExperimentReport(dir, runInfo, runs, records, docs.length, repeat);
+  for (const s of summaries)
+    console.log(`\n${s.effort}: box pass ${s.boxRate ? (100 * s.boxRate.mean).toFixed(1) : "–"}% · values ${s.valueRate ? (100 * s.valueRate.mean).toFixed(1) : "–"}% · ` +
+      `${s.liveCalls} live / ${s.cachedCalls} cached · $${s.usd.toFixed(4)}${s.lengthFailures ? ` · ${s.lengthFailures} length failures` : ""}`);
+  console.log(`\nReport: ${path.relative(process.cwd(), path.join(dir, "report.md"))}\n`);
   if (stopped) process.exitCode = 4;
 }
 

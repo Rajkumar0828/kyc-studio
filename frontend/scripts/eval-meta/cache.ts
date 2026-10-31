@@ -32,9 +32,11 @@ export function hashImages(body: ChatRequest): { body: unknown; fileHashes: stri
 }
 
 // sha256 of model + full request body (prompt, schema, reasoning settings, caps) + each attached file's hash.
-export function cacheKey(body: ChatRequest): string {
+// `repeat` (repeatability runs only) is part of the key but never sent to Meta;
+// plain runs leave it out, so their keys are unchanged.
+export function cacheKey(body: ChatRequest, repeat?: number): string {
   const { body: hashed, fileHashes } = hashImages(body);
-  return sha256(JSON.stringify({ model: body.model, body: hashed, files: fileHashes }));
+  return sha256(JSON.stringify(repeat === undefined ? { model: body.model, body: hashed, files: fileHashes } : { model: body.model, body: hashed, files: fileHashes, repeat }));
 }
 
 export interface CallRecord {
@@ -42,6 +44,8 @@ export interface CallRecord {
   doc: string | null; // specimen file the call was about, if any
   step: MetaStep | "preflight";
   model: string;
+  effort: string; // reasoning_effort sent with the request
+  repeat: number | null; // repeatability runs only
   inputTokens: number | null;
   outputTokens: number | null;
   reasoningTokens: number | null;
@@ -72,6 +76,7 @@ export interface EvalCallOptions {
   refresh: boolean; // ignore hits but still write
   maxCalls: number;
   caseId: () => string;
+  repeat?: () => number | undefined; // current repeat index, if any
   docFor: (fileHash: string) => string | null;
   onRecord: (r: CallRecord) => void;
 }
@@ -82,9 +87,10 @@ export function createEvalCall(o: EvalCallOptions) {
   const file = (key: string) => path.join(o.cacheDir, `${key}.json`);
 
   const call = async (step: MetaStep | "preflight", body: ChatRequest, send: (b: ChatRequest) => Promise<ChatResult>): Promise<ChatResult> => {
-    const key = cacheKey(body);
+    const repeat = o.repeat?.();
+    const key = cacheKey(body, repeat);
     const { fileHashes } = hashImages(body);
-    const base = { caseId: o.caseId(), doc: fileHashes.length ? o.docFor(fileHashes[0]) : null, step, model: body.model };
+    const base = { caseId: o.caseId(), doc: fileHashes.length ? o.docFor(fileHashes[0]) : null, step, model: body.model, effort: body.reasoning_effort, repeat: repeat ?? null };
     const usageOf = (r: ChatResult) => ({
       inputTokens: r.usage?.prompt_tokens ?? null,
       outputTokens: r.usage?.completion_tokens ?? null,
@@ -122,6 +128,6 @@ export function createEvalCall(o: EvalCallOptions) {
     call: call as ChatWrapper,
     callStep: call,
     liveCalls: () => live,
-    isCached: (body: ChatRequest) => o.useCache && !o.refresh && fs.existsSync(file(cacheKey(body))),
+    isCached: (body: ChatRequest, repeat?: number) => o.useCache && !o.refresh && fs.existsSync(file(cacheKey(body, repeat))),
   };
 }

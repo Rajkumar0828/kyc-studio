@@ -11,6 +11,8 @@ import type { Check } from "../src/lib/pipeline/types";
 import { getDefaultPolicy } from "../src/lib/policy/defaults";
 import { cacheKey, CallCapReached, createEvalCall, type CallRecord } from "./eval-meta/cache";
 import { planCase } from "./eval-meta/estimate";
+import { planExtractOnly, summarise, uniqueDocs } from "./eval-meta/experiment";
+import { scoreField } from "./eval-meta/score";
 
 let failed = 0;
 async function test(name: string, fn: () => Promise<void> | void) {
@@ -94,6 +96,69 @@ async function main() {
       counts[c.case_id] = planCase({ caseId: c.case_id, policy: getDefaultPolicy(cf.policy_id)!, expectedDecision: cf.expected.decision, expectedCodes: cf.expected.flag_codes, docs, qualityChecks }, {}).length;
     }
     assert.deepEqual(counts, { "p1-clean": 5, "p2-clean": 5, "p1-expired": 6, "p2-name-mismatch": 6, "p1-address-mismatch": 6, "p2-blurry": 2 });
+  });
+
+  await test("repeat index changes the cache key; plain runs keep their old key", () => {
+    const k = [cacheKey(body()), cacheKey(body(), 0), cacheKey(body(), 1), cacheKey(body(), 2)];
+    assert.equal(new Set(k).size, 4);
+    assert.equal(cacheKey(body(), undefined), k[0]);
+  });
+
+  await test("a repeat is cached only under its own index", async () => {
+    const d2 = fs.mkdtempSync(path.join(os.tmpdir(), "kyc-eval-repeat-"));
+    let rep = 0;
+    const recs: CallRecord[] = [];
+    const ec2 = createEvalCall({ cacheDir: d2, useCache: true, refresh: false, maxCalls: 10, caseId: () => "x", repeat: () => rep, docFor: () => null, onRecord: (r) => recs.push(r) });
+    await ec2.callStep("extraction", body(), async () => reply); // repeat 0 live
+    rep = 1;
+    await ec2.callStep("extraction", body(), async () => reply); // repeat 1 live, not a cache hit
+    rep = 0;
+    await ec2.callStep("extraction", body(), async () => reply); // repeat 0 again: cached
+    assert.deepEqual(recs.map((r) => [r.repeat, r.cached]), [[0, false], [1, false], [0, true]]);
+    assert.equal(ec2.isCached(body(), 2), false);
+    fs.rmSync(d2, { recursive: true, force: true });
+  });
+
+  await test("extract-only plan: 10 unique specimen documents x 2 efforts x 3 repeats = 60 calls", () => {
+    const root = path.resolve(__dirname, "..", "..", "eval", "specimens");
+    const index = JSON.parse(fs.readFileSync(path.join(root, "index.json"), "utf8")) as { cases: Array<{ files: Array<{ file: string; role: string; document_type?: string }> }> };
+    const docs = index.cases.flatMap((c) => c.files.filter((f) => f.role === "document"))
+      .map((f) => ({
+        name: f.file, documentType: f.document_type!, file: { filename: path.basename(f.file), mime: "image/png", bytes: fs.readFileSync(path.join(root, f.file)) },
+        ...(({ fields, defects }) => ({ truth: fields, defects }))(JSON.parse(fs.readFileSync(path.join(root, f.file.replace(/\.png$/, ".truth.json")), "utf8"))),
+      }));
+    const unique = uniqueDocs(docs);
+    assert.equal(docs.length, 12);
+    assert.equal(unique.length, 10); // two cases reuse an ID with identical printed content
+    assert.deepEqual(unique.filter((d) => d.documentType === "national_id").map((d) => d.name), ["p1-clean/id.png", "p2-clean/id.png", "p1-expired/id.png", "p2-blurry/id.png"]);
+    const plan = planExtractOnly(unique, ["medium", "low"], 3, {});
+    assert.equal(plan.length, 60);
+    assert.deepEqual([...new Set(plan.map((p) => p.body.reasoning_effort))], ["medium", "low"]);
+    assert.equal(new Set(plan.map((p) => cacheKey(p.body, p.repeat))).size, 60);
+  });
+
+  await test("experiment summary: per-repeat range, ID/bill split, agreement and failed-box diagnostics", () => {
+    const truth = { found: true, value: "A", normalized: "A", box: [100, 100, 300, 200] as [number, number, number, number] };
+    const good = (v = "A") => scoreField("full_name", { found: true, value: v, box: [110, 110, 290, 190] }, truth);
+    const bad = () => scoreField("full_name", { found: true, value: "A", box: [500, 500, 700, 600] }, truth);
+    const docR = (doc: string, type: string, fields: ReturnType<typeof good>[]) => ({ doc, truthType: type, predictedType: null, classPass: null, extractionCached: false, fields });
+    const runs = [
+      { effort: "low", repeat: 0, docs: [docR("a/id.png", "national_id", [good()]), docR("a/bill.png", "utility_bill", [good()])], failures: [] },
+      { effort: "low", repeat: 1, docs: [docR("a/id.png", "national_id", [good()]), docR("a/bill.png", "utility_bill", [bad()])], failures: [] },
+      { effort: "low", repeat: 2, docs: [docR("a/id.png", "national_id", [good("B")]), docR("a/bill.png", "utility_bill", [good()])], failures: [{ doc: "x", type: "length" as const, message: "cut" }] },
+    ];
+    const rec = (latencyMs: number): CallRecord => ({ caseId: "x", doc: null, step: "extraction", model: "m", effort: "low", repeat: 0, inputTokens: 100, outputTokens: 10, reasoningTokens: 5, cachedInputTokens: 0, latencyMs, cached: false, finishReason: "stop" });
+    const [s] = summarise(runs, [rec(100), rec(300)], { input: 1, cachedInput: 0, output: 1 });
+    assert.equal(s.boxRate!.min, 0.5);
+    assert.equal(s.boxRate!.max, 1);
+    assert.ok(Math.abs(s.boxRate!.mean - 5 / 6) < 1e-9);
+    assert.equal(s.boxRateId!.mean, 1);
+    assert.ok(Math.abs(s.boxRateBill!.mean - 2 / 3) < 1e-9);
+    assert.deepEqual(s.agreement, { agreed: 1, total: 2 }); // bill value stable, ID changed in repeat 2
+    assert.equal(s.meanLatencyMs, 200);
+    assert.equal(s.lengthFailures, 1);
+    assert.equal(s.failedBoxes.n, 1);
+    assert.equal(s.failedBoxes.dx!.mean, 40);
   });
 
   console.log(failed ? `\n${failed} failed` : "\nall passed");
