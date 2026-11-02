@@ -155,6 +155,8 @@ export function ApplyJourney({ policyId }: { policyId: string }) {
   const [policy, setPolicy] = useState<PolicySpec | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [guide, setGuide] = useState<StoredGuide | null>(null);
+  const [aiMode, setAiMode] = useState<string | null>(null);
+  const [versionChanged, setVersionChanged] = useState(false);
   const [stepIndex, setStepIndex] = useState(0);
   const [agreed, setAgreed] = useState(false);
   const [consentAt, setConsentAt] = useState<string | null>(null);
@@ -167,8 +169,9 @@ export function ApplyJourney({ policyId }: { policyId: string }) {
   const moved = useRef(false);
 
   useEffect(() => {
-    api<{ published: PolicyVersion | null; archived: boolean }>(`/api/policies/${policyId}`)
-      .then(({ published, archived }) => {
+    api<{ published: PolicyVersion | null; archived: boolean; provider: string }>(`/api/policies/${policyId}`)
+      .then(({ published, archived, provider }) => {
+        setAiMode(provider);
         if (!published) return setLoadError(archived ? "This policy has been archived and no longer accepts applications." : "This policy has not been published yet.");
         setPolicy(published.spec);
         setGuide(published.guide);
@@ -225,6 +228,7 @@ export function ApplyJourney({ policyId }: { policyId: string }) {
       next();
     } catch (e) {
       setSubmitError(e instanceof Error ? e.message : String(e));
+      setVersionChanged(e instanceof ApiError && e.code === "policy_version_changed");
     } finally {
       setSubmitting(false);
     }
@@ -297,7 +301,7 @@ export function ApplyJourney({ policyId }: { policyId: string }) {
                 )}
               </ul>
               <p className="mt-4 text-sm text-zinc-600 dark:text-zinc-400">You must be at least {policy.minAge} years old.</p>
-              {guide?.source === "template" && (
+              {aiMode === "mock" && (
                 <div className="mt-4 flex gap-3 rounded-xl border border-fuchsia-200 bg-fuchsia-50 p-3 text-sm text-fuchsia-900 dark:border-fuchsia-900 dark:bg-fuchsia-950/50 dark:text-fuchsia-200">
                   <Badge tone="mock" className="h-fit">mock</Badge>
                   <p>No model reads your files. Uploading the synthetic specimens from <code className="font-mono">eval/specimens/&lt;case&gt;/</code> returns that case&apos;s scripted outcome; other files get placeholder data.</p>
@@ -372,7 +376,13 @@ export function ApplyJourney({ policyId }: { policyId: string }) {
                   <dd>{consentAt && new Date(consentAt).toLocaleString()}</dd>
                 </div>
               </dl>
-              {submitError && <div className="mt-4"><ErrorNotice title="We couldn't submit your application">{submitError}</ErrorNotice></div>}
+              {submitError && (
+                <div className="mt-4">
+                  <ErrorNotice title="We couldn't submit your application" action={versionChanged ? <Button size="sm" variant="secondary" onClick={() => window.location.reload()}>Reload the page</Button> : undefined}>
+                    {submitError}
+                  </ErrorNotice>
+                </div>
+              )}
               <Actions>
                 <Button variant="secondary" size="lg" className={wide} onClick={back} disabled={submitting}>Back</Button>
                 <Button size="lg" className={wide} onClick={submit} disabled={submitting}>

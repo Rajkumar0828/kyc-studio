@@ -1,3 +1,4 @@
+import { providerName } from "@/src/lib/ai/provider";
 import { signCompile } from "@/src/lib/policy/compileToken";
 import { CompiledRules } from "@/src/lib/policy/schema";
 import { getPolicyStore } from "@/src/lib/policy/store";
@@ -18,6 +19,7 @@ export async function GET(req: Request, ctx: RouteContext<"/api/policies/[id]">)
   if (!versions.length && !draft) return Response.json({ error: "Unknown policy" }, { status: 404 });
   return Response.json({
     published, draft, versions, archived, nextVersion: (versions.at(-1) ?? 0) + 1,
+    provider: providerName(), // which AI mode this server runs (mock|meta), for labels in the UI
     draftToken: draft ? signCompile({ sourceText: draft.sourceText, rules: draft.rules, compile: draft.compile }) : null,
     publishedToken: published ? signCompile({ sourceText: published.spec.sourceText, rules: rulesOf(published.spec), compile: published.compile }) : null,
   });
