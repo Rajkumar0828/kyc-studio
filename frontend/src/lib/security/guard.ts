@@ -6,6 +6,8 @@ import { CompilePreflightError, CompileValidationError } from "../ai/metaPolicyC
 import { CompileInputError } from "../policy/compileCore";
 import { AuditAppendFailed } from "../audit/chain";
 import { PolicyStoreError } from "../policy/store";
+import { MongoNotConfigured } from "../db/mongo";
+import { VaultError } from "../vault/transit";
 import { AiBudgetExceeded, aiBudgetLeft } from "./aiBudget";
 
 export { AiBudgetExceeded, consumeAiCall, metered } from "./aiBudget";
@@ -94,9 +96,16 @@ export function errorResponse(e: unknown, fallback = "Request failed"): Response
     return json(502, e.step === "compile"
       ? `This policy is too long to compile in one go (the answer hit the ${e.maxCompletionTokens}-token limit). Split it into shorter parts and compile each part as its own policy.`
       : `The model's answer was cut off at ${e.maxCompletionTokens} tokens (step ${e.step}). Try again.`, "output_truncated");
-  console.error(e);
+  if (e instanceof MongoNotConfigured || (e instanceof Error && /^Mongo(ServerSelection|Network|NotConnected|Topology)/.test(e.name)))
+    return json(503, "The database is not available right now.", "storage_unavailable");
+  if (e instanceof VaultError) return json(503, "The encryption service (Vault) is not available right now.", "storage_unavailable");
+  // Log the error class and code only: messages can carry connection details or content.
+  console.error("[error]", e instanceof Error ? `${e.name}${(e as { code?: unknown }).code !== undefined ? ` code=${String((e as { code?: unknown }).code)}` : ""}` : "unknown");
   return json(500, fallback, "error");
 }
+
+// For routes and pages that need MongoDB (and Vault): 409 with the setting to change.
+export const requiresStorage = (message: string) => json(409, message, "requires_storage");
 
 // ---- admin access: a SECOND secret for destructive actions ----
 // Delete customer, retention purge, seed reset and any bulk wipe need the demo
