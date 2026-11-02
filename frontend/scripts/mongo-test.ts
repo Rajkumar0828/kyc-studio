@@ -1,30 +1,30 @@
 // npx tsx --env-file=.env.local scripts/mongo-test.ts
-// Saves a fake test document with PII fields stored as Vault ciphertext, then reads it back.
-import { mongo, db } from "../src/lib/db/mongo";
-import { ensureKey, encrypt, decrypt } from "../src/lib/vault/transit";
+// Saves a fake test document with its personal fields as one Vault ciphertext, reads it back, then cleans up.
+import { randomUUID } from "node:crypto";
+import { closeMongo, getDb } from "../src/lib/db/mongo";
+import { decryptJson, deleteKey, encryptJson, ensureKey, keyNameFor } from "../src/lib/vault/transit";
 
 async function main() {
-  const customerId = "test-001";
-  const key = `cust-${customerId}`;
+  const customerId = randomUUID();
+  const key = keyNameFor(customerId);
   await ensureKey(key);
 
   const pii = { full_name: "Jane Specimen", date_of_birth: "1990-01-01", document_number: "X0000000" };
-  const enc = Object.fromEntries(await Promise.all(Object.entries(pii).map(async ([k, v]) => [k, await encrypt(key, v)])));
-
-  const col = (await db()).collection("documents");
-  const { insertedId } = await col.insertOne({ customerId, document_type: "specimen", pii: enc, createdAt: new Date() });
+  const col = (await getDb()).collection("connectivity_test");
+  const { insertedId } = await col.insertOne({ customerId, envelope: await encryptJson(key, pii), createdAt: new Date() });
   const saved = await col.findOne({ _id: insertedId });
-  console.log("stored:", JSON.stringify(saved, null, 2));
+  if (!String(saved!.envelope).startsWith("vault:v")) throw new Error("envelope is not ciphertext");
+  const back = await decryptJson<typeof pii>(key, saved!.envelope);
+  if (back.full_name !== pii.full_name) throw new Error("round-trip mismatch");
+  console.log("Mongo + Vault round trip ok");
 
-  for (const [k, ct] of Object.entries(saved!.pii as Record<string, string>)) {
-    if (!ct.startsWith("vault:v")) throw new Error(`${k} is not ciphertext`);
-    console.log(`${k} ->`, await decrypt(key, ct));
-  }
+  await col.deleteOne({ _id: insertedId });
+  await deleteKey(key);
 }
 
 main()
   .catch((e) => {
-    console.error(e);
+    console.error(e instanceof Error ? `${e.name}: ${e.message}` : e);
     process.exitCode = 1;
   })
-  .finally(async () => (await mongo).close());
+  .finally(closeMongo);

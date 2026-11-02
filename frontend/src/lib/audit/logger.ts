@@ -13,7 +13,7 @@ export const consoleSink: AuditSink = async (e) => console.log(`[audit] ${e.case
 
 export function mongoSink(): AuditSink {
   return async (e) => {
-    const { db } = await import("../db/mongo");
-    await (await db()).collection("audit_events").insertOne(e);
+    const { getDb } = await import("../db/mongo");
+    await (await getDb()).collection("audit_events").insertOne(e);
   };
 }
