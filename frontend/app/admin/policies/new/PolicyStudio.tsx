@@ -195,6 +195,9 @@ export function PolicyStudio({ editId }: { editId?: string }) {
             </Button>
             <span className="text-xs text-zinc-500">{text.length}/{MAX_CHARS} characters · up to 60 sentences</span>
           </div>
+          <p role="status" aria-live="polite" className={cx("mt-3 flex items-center gap-2 text-sm text-zinc-600 dark:text-zinc-400", busy !== "compile" && "sr-only")}>
+            {busy === "compile" && <><Spinner /> Compiling, usually under 30 seconds. The read-back appears when it is ready.</>}
+          </p>
           {stale && <div className="mt-4"><ErrorNotice tone="warning">The text changed since the last compile. Compile again before saving.</ErrorNotice></div>}
         </Card>
 

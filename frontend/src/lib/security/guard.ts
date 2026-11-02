@@ -88,7 +88,10 @@ export function errorResponse(e: unknown, fallback = "Request failed"): Response
   if (e instanceof CompileInputError) return json(400, e.message, "compile_input");
   if (e instanceof CompileValidationError) return json(502, `${e.message}. Nothing was compiled; try again or rephrase the policy.`, "compile_invalid");
   if (e instanceof CompilePreflightError) return json(502, e.message, "compile_preflight");
-  if (e instanceof MetaOutputTruncated) return json(502, `The model's answer was cut off at ${e.maxCompletionTokens} tokens (step ${e.step}). Shorten the text or try again.`, "output_truncated");
+  if (e instanceof MetaOutputTruncated)
+    return json(502, e.step === "compile"
+      ? `This policy is too long to compile in one go (the answer hit the ${e.maxCompletionTokens}-token limit). Split it into shorter parts and compile each part as its own policy.`
+      : `The model's answer was cut off at ${e.maxCompletionTokens} tokens (step ${e.step}). Try again.`, "output_truncated");
   console.error(e);
   return json(500, fallback, "error");
 }
