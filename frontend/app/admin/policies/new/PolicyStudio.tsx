@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Badge, type Tone } from "@/app/components/Badge";
+import { Badge } from "@/app/components/Badge";
 import { Button, ButtonLink } from "@/app/components/Button";
 import { Card, CardHeader } from "@/app/components/Card";
+import { ConfirmDialog } from "@/app/components/ConfirmDialog";
 import { cx } from "@/app/components/cx";
 import { EmptyState } from "@/app/components/EmptyState";
 import { ErrorNotice } from "@/app/components/ErrorNotice";
@@ -13,30 +14,39 @@ import { ProviderBadge } from "@/app/components/ProviderBadge";
 import type { CompileWarning } from "@/src/lib/ai/types";
 import { api, postJson } from "@/src/lib/client/api";
 import { EXAMPLE_PROMPTS } from "@/src/lib/policy/defaults";
+import { TEMPLATE_FALLBACK_LABEL } from "@/src/lib/policy/guideLabels";
 import { docList, RULE_LABEL } from "@/src/lib/policy/labels";
-import { defaultConsentText, type CompiledRules, type PolicySpec, type RuleKind } from "@/src/lib/policy/schema";
 import type { CompileRecord } from "@/src/lib/policy/readBack";
+import { defaultConsentText, type CompiledRules, type RuleKind } from "@/src/lib/policy/schema";
 import type { PolicyDraft, PolicyVersion } from "@/src/lib/policy/store/types";
+import { CompileDetails } from "./CompileDetails";
+import { ReadBackTable } from "./ReadBackTable";
 
 interface Compiled {
   rules: CompiledRules;
   warnings: CompileWarning[];
-  provider: string; // "saved" when loaded from a stored policy
-  compile: CompileRecord | null;
+  compile: CompileRecord | null; // null for policies compiled before read-backs were stored
   token: string; // signed by the server; required to save these rules
 }
 
+const MAX_CHARS = 8000;
 const pickRules = (r: CompiledRules): CompiledRules => {
   const { provenance, requiredDocuments, minAge, proofOfAddressMaxAgeDays, selfieRequired, authorityLookup, autoApproveEnabled, autoApproveMaxScore, retentionDays } = r;
   return { provenance, requiredDocuments, minAge, proofOfAddressMaxAgeDays, selfieRequired, authorityLookup, autoApproveEnabled, autoApproveMaxScore, retentionDays };
 };
 const slug = (name: string) => name.toLowerCase().normalize("NFKD").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 48);
 
-const WARNING: Record<CompileWarning["kind"], { tone: Tone; label: string; hint: string }> = {
-  unsupported: { tone: "danger", label: "Not supported", hint: "Ignored. Rephrase it as a supported rule, or handle it outside this policy." },
-  conflict: { tone: "warning", label: "Conflict", hint: "Two sentences disagree; the first one was kept." },
-  default: { tone: "neutral", label: "Default used", hint: "Not stated in the text, so a default applies." },
-};
+function GuideSourceNote({ version }: { version: PolicyVersion }) {
+  const g = version.guide;
+  if (g.source === "ai") return <span className="flex flex-wrap items-center gap-2">Customer step wording: <ProviderBadge provider={g.model ? `${g.provider} · ${g.model}` : g.provider} label="AI" /></span>;
+  if (g.source === "template") return <span className="flex flex-wrap items-center gap-2">Customer step wording: <ProviderBadge provider="mock" label="template" /></span>;
+  return (
+    <span className="flex flex-wrap items-center gap-2">
+      Customer step wording: <Badge tone="warning">{TEMPLATE_FALLBACK_LABEL}</Badge>
+      {g.note && <span className="text-xs text-zinc-500">{g.note}</span>}
+    </span>
+  );
+}
 
 export function PolicyStudio({ editId }: { editId?: string }) {
   const [name, setName] = useState("");
@@ -49,7 +59,8 @@ export function PolicyStudio({ editId }: { editId?: string }) {
   const [saved, setSaved] = useState<PolicyDraft | null>(null);
   const [nextVersion, setNextVersion] = useState(1);
   const [dirty, setDirty] = useState(false); // edits since the last save
-  const [published, setPublished] = useState<PolicySpec | null>(null);
+  const [published, setPublished] = useState<PolicyVersion | null>(null);
+  const [confirmOpen, setConfirmOpen] = useState(false);
   const [showJson, setShowJson] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -67,7 +78,7 @@ export function PolicyStudio({ editId }: { editId?: string }) {
         setText(p.sourceText);
         setConsent(p.consentText);
         setConsentEdited(true);
-        setCompiled({ rules: pickRules("rules" in p ? p.rules : p), warnings: [], provider: "saved", compile: draft ? draft.compile : pub?.compile ?? null, token: (draft ? draftToken : publishedToken) ?? "" });
+        setCompiled({ rules: pickRules("rules" in p ? p.rules : p), warnings: [], compile: draft ? draft.compile : pub?.compile ?? null, token: (draft ? draftToken : publishedToken) ?? "" });
         setCompiledText(p.sourceText);
         if (draft) setSaved(draft);
       })
@@ -85,10 +96,11 @@ export function PolicyStudio({ editId }: { editId?: string }) {
     setBusy("compile");
     setError(null);
     try {
-      const r = await postJson<Omit<Compiled, "provider">>("/api/policies/compile", { text });
-      setCompiled({ ...r, provider: r.compile?.provider ?? "mock" });
+      const r = await postJson<Compiled>("/api/policies/compile", { text });
+      setCompiled(r);
       setCompiledText(text);
       setDirty(true);
+      setPublished(null);
       if (!consentEdited) setConsent(defaultConsentText(r.rules.retentionDays));
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -122,13 +134,14 @@ export function PolicyStudio({ editId }: { editId?: string }) {
     setError(null);
     try {
       const { policy } = await postJson<{ policy: PolicyVersion }>(`/api/policies/${saved.id}/publish`, {});
-      setPublished(policy.spec);
+      setPublished(policy);
       setNextVersion(policy.spec.version + 1);
       setSaved(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
       setBusy(null);
+      setConfirmOpen(false);
     }
   }
 
@@ -139,13 +152,13 @@ export function PolicyStudio({ editId }: { editId?: string }) {
     name, customerCategory: category, sourceText: text, consentText: consent,
     ...compiled.rules,
   };
-  const canSave = !!compiled && !stale && !!name.trim() && !!category.trim() && !!consent.trim() && busy === null;
+  const canSave = !!compiled && !stale && !!compiled.token && !!name.trim() && !!category.trim() && !!consent.trim() && busy === null;
   const status = published
     ? null
     : saved && !dirty ? `Draft saved. Publishing creates version ${nextVersion}.` : saved ? "Unsaved changes." : compiled ? "Save a draft before publishing." : "Compile the policy first.";
 
   return (
-    <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+    <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
       <section aria-label="Policy input" className="flex flex-col gap-6">
         <Card>
           <CardHeader title="Details" />
@@ -161,7 +174,7 @@ export function PolicyStudio({ editId }: { editId?: string }) {
         </Card>
 
         <Card>
-          <CardHeader title="Policy in plain English" description="One rule per sentence works best. Only the nine supported rule kinds are applied; everything else is flagged." />
+          <CardHeader title="Policy in plain English" description="One rule per sentence works best. Only the nine supported rule kinds are applied; everything else is flagged. To change a rule, change the text and compile again." />
           <div className="mb-3">
             <p id="examples-label" className="mb-2 text-xs font-medium uppercase tracking-wide text-zinc-500">Start from an example</p>
             <div role="group" aria-labelledby="examples-label" className="flex flex-wrap gap-2">
@@ -174,13 +187,13 @@ export function PolicyStudio({ editId }: { editId?: string }) {
             </div>
           </div>
           <label htmlFor="policy-text" className="sr-only">Policy text</label>
-          <TextArea id="policy-text" value={text} onChange={(e) => edit(setText)(e.target.value)} rows={9} maxLength={4000}
+          <TextArea id="policy-text" value={text} onChange={(e) => edit(setText)(e.target.value)} rows={10} maxLength={MAX_CHARS}
             placeholder="Require a passport. Applicants must be at least 18 years old. …" />
           <div className="mt-4 flex flex-wrap items-center gap-3">
             <Button onClick={compile} disabled={!text.trim() || busy !== null}>
               {busy === "compile" ? <><Spinner /> Compiling…</> : <><Icon name="sparkle" /> Compile</>}
             </Button>
-            <span className="text-xs text-zinc-500">{text.length}/4000</span>
+            <span className="text-xs text-zinc-500">{text.length}/{MAX_CHARS} characters · up to 60 sentences</span>
           </div>
           {stale && <div className="mt-4"><ErrorNotice tone="warning">The text changed since the last compile. Compile again before saving.</ErrorNotice></div>}
         </Card>
@@ -192,98 +205,89 @@ export function PolicyStudio({ editId }: { editId?: string }) {
         </Card>
       </section>
 
-      <section aria-label="Compiled policy" className="flex flex-col gap-6 lg:sticky lg:top-6">
+      <section aria-label="Compiled policy" className="flex flex-col gap-6">
         {error && <ErrorNotice title="Something went wrong">{error}</ErrorNotice>}
 
         {!compiled ? (
-          <EmptyState icon="sparkle" title="Nothing compiled yet" description="Pick an example or write your own rules, then press Compile to see each setting and where it came from." />
+          <EmptyState icon="sparkle" title="Nothing compiled yet" description="Pick an example or write your own rules, then press Compile. Each sentence appears with the rule it produced and any warnings." />
         ) : (
           <>
-            <Card>
-              <CardHeader title="Preview"
+            <Card className={cx(stale && "opacity-60")}>
+              <CardHeader title="Read-back"
+                description={stale ? "Out of date: the text changed since this compile." : "What the platform understood, sentence by sentence."}
                 actions={
-                  <>
-                    {compiled.provider === "saved" ? <Badge>saved version</Badge> : <ProviderBadge provider={compiled.provider} label="Compiled by" />}
-                    <div role="group" aria-label="Preview format" className="inline-flex rounded-lg border border-zinc-200 p-0.5 dark:border-zinc-700">
-                      {(["Summary", "JSON"] as const).map((v) => {
-                        const on = (v === "JSON") === showJson;
-                        return (
-                          <button key={v} type="button" aria-pressed={on} onClick={() => setShowJson(v === "JSON")}
-                            className={cx("rounded-md px-2.5 py-1 text-xs font-medium motion-safe:transition-colors", on ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900" : "text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100")}>
-                            {v}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </>
+                  <div role="group" aria-label="Preview format" className="inline-flex rounded-lg border border-zinc-200 p-0.5 dark:border-zinc-700">
+                    {(["Read-back", "JSON"] as const).map((v) => {
+                      const on = (v === "JSON") === showJson;
+                      return (
+                        <button key={v} type="button" aria-pressed={on} onClick={() => setShowJson(v === "JSON")}
+                          className={cx("rounded-md px-2.5 py-1 text-xs font-medium motion-safe:transition-colors", on ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900" : "text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100")}>
+                          {v}
+                        </button>
+                      );
+                    })}
+                  </div>
                 } />
               {showJson ? (
-                <pre className="max-h-[32rem] overflow-auto rounded-xl bg-zinc-950 p-4 font-mono text-xs leading-relaxed text-zinc-100">{JSON.stringify(preview, null, 2)}</pre>
+                <pre className="max-h-[36rem] overflow-auto rounded-xl bg-zinc-950 p-4 font-mono text-xs leading-relaxed text-zinc-100">{JSON.stringify(preview, null, 2)}</pre>
+              ) : compiled.compile ? (
+                <ReadBackTable rows={compiled.compile.rows} />
               ) : (
-                <Summary rules={compiled.rules} />
+                <>
+                  <p className="mb-3 text-sm text-zinc-500">No sentence-by-sentence read-back is stored for this version; compile again to see one. Current settings:</p>
+                  <Summary rules={compiled.rules} />
+                </>
               )}
             </Card>
 
-            <Card>
-              <CardHeader title={<>Warnings {compiled.warnings.length > 0 && <span className="font-normal text-zinc-500">({compiled.warnings.length})</span>}</>} />
-              {compiled.warnings.length === 0 ? (
-                <p className="flex items-center gap-2 text-sm text-emerald-700 dark:text-emerald-400"><Icon name="check" /> None. Every sentence mapped to a supported rule.</p>
-              ) : (
-                <ul className="flex flex-col gap-3">
-                  {compiled.warnings.map((w, i) => (
-                    <li key={i} className="rounded-xl border border-zinc-200 p-3 text-sm dark:border-zinc-800">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <Badge tone={WARNING[w.kind].tone}>{WARNING[w.kind].label}</Badge>
-                        <span className="font-medium text-zinc-900 dark:text-zinc-100">{w.message}</span>
-                      </div>
-                      {w.sentence && <blockquote className="mt-2 border-l-2 border-zinc-300 pl-3 text-zinc-600 dark:border-zinc-700 dark:text-zinc-400">{w.sentence}</blockquote>}
-                      <p className="mt-1.5 text-xs text-zinc-500">{WARNING[w.kind].hint}</p>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </Card>
+            {compiled.compile && (
+              <Card>
+                <CardHeader level={3} title="Compile call" />
+                <CompileDetails compile={compiled.compile} />
+              </Card>
+            )}
           </>
         )}
 
         <Card>
           <div className="flex flex-wrap items-center gap-3">
             <Button variant="secondary" onClick={saveDraft} disabled={!canSave}>{busy === "save" ? <><Spinner /> Saving…</> : "Save draft"}</Button>
-            <Button variant="success" onClick={publish} disabled={!saved || dirty || busy !== null}>{busy === "publish" ? <><Spinner /> Publishing…</> : "Publish"}</Button>
+            <Button variant="success" onClick={() => setConfirmOpen(true)} disabled={!saved || dirty || busy !== null}>Publish…</Button>
           </div>
           {status && <p className="mt-3 text-sm text-zinc-500" aria-live="polite">{status}</p>}
           {published && (
-            <div className="mt-3 flex flex-wrap items-center gap-3 text-sm" aria-live="polite">
-              <span className="flex items-center gap-1.5 font-medium text-emerald-700 dark:text-emerald-400"><Icon name="check" /> Published v{published.version}.</span>
-              <ButtonLink href={`/apply/${published.id}`} size="sm">Open the journey <Icon name="arrowRight" /></ButtonLink>
-              <ButtonLink href="/admin/policies" size="sm" variant="ghost">Back to policies</ButtonLink>
+            <div className="mt-3 flex flex-col gap-3 text-sm" aria-live="polite">
+              <span className="flex items-center gap-1.5 font-medium text-emerald-700 dark:text-emerald-400"><Icon name="check" /> Published as version {published.spec.version}.</span>
+              <GuideSourceNote version={published} />
+              <div className="flex flex-wrap gap-3">
+                <ButtonLink href={`/apply/${published.spec.id}`} size="sm">Open the customer journey <Icon name="arrowRight" /></ButtonLink>
+                <ButtonLink href="/admin/policies" size="sm" variant="ghost">Back to policies</ButtonLink>
+              </div>
             </div>
           )}
         </Card>
       </section>
+
+      <ConfirmDialog open={confirmOpen} title={`Publish ${name || "this policy"} as version ${nextVersion}?`} confirmLabel={`Publish version ${nextVersion}`}
+        tone="success" busy={busy === "publish"} onConfirm={publish} onCancel={() => setConfirmOpen(false)}>
+        <p>Published versions can&apos;t be changed; later edits become version {nextVersion + 1}. New applications will be evaluated against version {nextVersion}.</p>
+        <p className="mt-2">The customer step wording is generated now from this version. If AI wording is unavailable, the template wording is used and marked.</p>
+      </ConfirmDialog>
     </div>
   );
 }
 
-// One card row per setting, with the sentence(s) it came from.
+// Settings without a stored read-back (e.g. a version compiled before read-backs were kept).
 function Summary({ rules }: { rules: CompiledRules }) {
   const from = (...kinds: RuleKind[]) => rules.provenance.filter((p) => kinds.includes(p.rule)).map((p) => p.sentence);
   const hasPoa = rules.requiredDocuments.some((d) => d.label === "Proof of address");
   const rows: Array<{ label: string; value: string; sources: string[] }> = [
-    ...rules.requiredDocuments.map((d) => ({
-      label: d.label,
-      value: `Required: ${docList(d.anyOf)}`,
-      sources: from(d.label === "Proof of address" ? "require_address_doc" : "require_identity_doc"),
-    })),
+    ...rules.requiredDocuments.map((d) => ({ label: d.label, value: `Required: ${docList(d.anyOf)}`, sources: from(d.label === "Proof of address" ? "require_address_doc" : "require_identity_doc") })),
     { label: RULE_LABEL.min_age, value: `${rules.minAge} years`, sources: from("min_age") },
     ...(hasPoa ? [{ label: RULE_LABEL.poa_max_age, value: `Issued within ${rules.proofOfAddressMaxAgeDays} days`, sources: from("poa_max_age") }] : []),
     { label: RULE_LABEL.selfie_required, value: rules.selfieRequired ? "Required" : "Not required", sources: from("selfie_required") },
     { label: RULE_LABEL.authority_lookup, value: rules.authorityLookup ? "Check the ID against the registry" : "Off", sources: from("authority_lookup") },
-    {
-      label: "Auto-approval",
-      value: rules.autoApproveEnabled ? `When the risk score is ${rules.autoApproveMaxScore} or lower` : "Never: every case goes to manual review",
-      sources: from("auto_approve_threshold", "no_auto_approve"),
-    },
+    { label: "Auto-approval", value: rules.autoApproveEnabled ? `When the risk score is ${rules.autoApproveMaxScore} or lower` : "Never: every case goes to manual review", sources: from("auto_approve_threshold", "no_auto_approve") },
     { label: RULE_LABEL.retention, value: `${rules.retentionDays} days`, sources: from("retention") },
   ];
   return (
@@ -292,14 +296,10 @@ function Summary({ rules }: { rules: CompiledRules }) {
         <li key={i} className="rounded-xl border border-zinc-200 p-3 dark:border-zinc-800">
           <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
             <span className="text-xs font-medium uppercase tracking-wide text-zinc-500">{r.label}</span>
-            {!r.sources.length && <Badge>default</Badge>}
+            {!r.sources.length && <Badge>default applied</Badge>}
           </div>
           <p className="mt-1 font-medium text-zinc-900 dark:text-zinc-100">{r.value}</p>
-          {r.sources.map((s, j) => (
-            <blockquote key={j} className="mt-1.5 border-l-2 border-accent-300 pl-3 text-sm text-zinc-600 dark:border-accent-700 dark:text-zinc-400">
-              <span className="sr-only">Source sentence: </span>{s}
-            </blockquote>
-          ))}
+          {r.sources.map((s, j) => <blockquote key={j} className="mt-1.5 border-l-2 border-accent-300 pl-3 text-sm text-zinc-600 dark:border-accent-700 dark:text-zinc-400">{s}</blockquote>)}
         </li>
       ))}
     </ul>
