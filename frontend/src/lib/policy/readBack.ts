@@ -1,21 +1,53 @@
 import { z } from "zod";
+import {
+  PLATFORM_CHECK_TEXT, PLATFORM_CHECKS, REASON_TEXT, UNSUPPORTED_REASONS,
+  type AppliedLabel, type CompileWarning, type PlatformLabel, type Setter, type UnsupportedReason,
+} from "./compileCore";
 import { docList, RULE_LABEL } from "./labels";
-import { RuleKind, type CompiledRules } from "./schema";
+import { RuleKind } from "./schema";
 
 // The read-back table shown in the Policy Studio and stored with each draft and
-// version: every source sentence, the rules compiled from it, and its warnings.
-// Built deterministically by code from the compiler's output.
+// version: every source sentence with exactly one status, the rules or platform
+// checks it produced, and notes. Built deterministically by code.
+//
+// Statuses never contradict each other: a sentence that produced a rule is
+// "applied" or "applied_with_note", never "not applied".
 
 export const WarningKind = z.enum(["unsupported", "conflict", "default"]);
+export const RowStatus = z.enum(["applied", "platform_check", "applied_with_note", "not_applied", "note"]);
+export type RowStatus = z.infer<typeof RowStatus>;
+export const UnsupportedReasonSchema = z.enum(UNSUPPORTED_REASONS);
+export const PlatformCheckSchema = z.enum(PLATFORM_CHECKS);
 
-export const ReadBackRow = z.object({
+const Row = z.object({
   index: z.number().int().min(0).nullable(), // null for policy-wide notes (defaults)
   sentence: z.string().max(1000),
+  status: RowStatus,
   rules: z.array(z.object({ kind: RuleKind, summary: z.string().max(300) }).strict()).max(10),
-  warnings: z.array(z.object({ kind: WarningKind, message: z.string().max(300) }).strict()).max(10),
-  status: z.enum(["mapped", "partial", "unsupported", "note"]),
+  platformChecks: z.array(z.object({ check: PlatformCheckSchema, summary: z.string().max(200) }).strict()).max(3),
+  notes: z.array(z.object({ kind: z.enum(["conflict", "default", "partial"]), message: z.string().max(400) }).strict()).max(10),
+  reason: UnsupportedReasonSchema.nullable(), // set only when status is not_applied
+  reasonText: z.string().max(300).nullable(),
 }).strict();
-export type ReadBackRow = z.infer<typeof ReadBackRow>;
+
+// Rows stored before statuses existed ({ warnings, status: mapped|partial|unsupported|note }) are upgraded on read.
+const legacyReason = (m: string): UnsupportedReason =>
+  /not stated/i.test(m) ? "vague_no_number" : /not labelled/i.test(m) ? "not_labelled" : /negated|optional/i.test(m) ? "negated_requirement" : "unsupported_requirement";
+function upgrade(raw: unknown): unknown {
+  if (!raw || typeof raw !== "object" || !("warnings" in raw)) return raw;
+  const r = raw as { index: number | null; sentence: string; rules: Array<{ kind: string; summary: string }>; warnings: Array<{ kind: string; message: string }>; status: string };
+  const unsupported = r.warnings.filter((w) => w.kind === "unsupported");
+  const others = r.warnings.filter((w) => w.kind !== "unsupported").map((w) => ({ kind: w.kind as "conflict" | "default", message: w.message }));
+  if (r.status === "note") return { index: null, sentence: "", status: "note", rules: [], platformChecks: [], notes: others, reason: null, reasonText: null };
+  if (r.rules.length) {
+    const notes = [...others, ...unsupported.map((w) => ({ kind: "partial" as const, message: `Part of this sentence was not applied: ${REASON_TEXT[legacyReason(w.message)]}.` }))];
+    return { index: r.index, sentence: r.sentence, status: notes.length ? "applied_with_note" : "applied", rules: r.rules, platformChecks: [], notes, reason: null, reasonText: null };
+  }
+  const reason = legacyReason(unsupported[0]?.message ?? "");
+  return { index: r.index, sentence: r.sentence, status: "not_applied", rules: [], platformChecks: [], notes: others, reason, reasonText: REASON_TEXT[reason] };
+}
+export const ReadBackRow = z.preprocess(upgrade, Row);
+export type ReadBackRow = z.infer<typeof Row>;
 
 export const CallUsage = z.object({
   inputTokens: z.number().int().nullable(),
@@ -37,48 +69,62 @@ export const CompileRecord = z.object({
 }).strict();
 export type CompileRecord = z.infer<typeof CompileRecord>;
 
-export interface CompileWarningLike {
-  kind: "unsupported" | "conflict" | "default";
-  sentence?: string;
-  message: string;
-}
+// "3 months (stored as 90 days)" when code converted the period, else "90 days".
+const period = (days: number | undefined, as?: string) => (as ? `${as} (stored as ${days} days)` : `${days} days`);
 
-// One line per rule kind, from the compiled rules (first value wins on conflicts).
-export function ruleSummary(kind: RuleKind, r: CompiledRules): string {
+// One line for one rule label, from that label's own values (not the merged rules),
+// so a sentence that conflicts with an earlier one still shows what it said.
+export function labelSummary(kind: RuleKind, set: Setter, as?: string): string {
   switch (kind) {
-    case "require_identity_doc": {
-      const d = r.requiredDocuments.find((x) => x.label === "Government photo ID");
-      return d ? `Require a government photo ID: ${docList(d.anyOf)}` : RULE_LABEL[kind];
-    }
+    case "require_identity_doc":
     case "require_address_doc": {
-      const d = r.requiredDocuments.find((x) => x.label === "Proof of address");
-      return d ? `Require proof of address: ${docList(d.anyOf)}` : RULE_LABEL[kind];
+      const d = set.requiredDocuments?.[0];
+      return d ? `Require ${kind === "require_identity_doc" ? "a government photo ID" : "proof of address"}: ${docList(d.anyOf)}` : RULE_LABEL[kind];
     }
-    case "min_age": return `Minimum age ${r.minAge}`;
-    case "poa_max_age": return `Proof of address issued within ${r.proofOfAddressMaxAgeDays} days`;
-    case "selfie_required": return r.selfieRequired ? "Selfie required" : "Selfie not required";
-    case "authority_lookup": return r.authorityLookup ? "Check the ID against the registry" : "No registry check";
-    case "auto_approve_threshold": return r.autoApproveEnabled ? `Auto-approve at risk score ${r.autoApproveMaxScore} or lower` : "Auto-approval disabled";
+    case "min_age": return `Minimum age ${set.minAge}`;
+    case "poa_max_age": return `Proof of address issued within ${period(set.proofOfAddressMaxAgeDays, as)}`;
+    case "selfie_required": return set.selfieRequired ? "Selfie required" : "Selfie not required";
+    case "authority_lookup": return set.authorityLookup ? "Check the ID against the registry" : "No registry check";
+    case "auto_approve_threshold": return `Auto-approve at risk score ${set.autoApproveMaxScore} or lower`;
     case "no_auto_approve": return "Never auto-approve; every case goes to manual review";
-    case "retention": return `Keep data for ${r.retentionDays} days`;
+    case "retention": return `Keep data for ${period(set.retentionDays, as)}`;
   }
 }
 
-// Every sentence gets a row, in order; warnings without a sentence become note rows at the end.
-export function buildReadBack(sentences: string[], rules: CompiledRules, warnings: CompileWarningLike[]): ReadBackRow[] {
+export interface ReadBackInput {
+  applied: AppliedLabel[];
+  platform: PlatformLabel[];
+  warnings: CompileWarning[];
+}
+
+// Exactly one status per sentence, in order; policy-wide notes come last.
+export function buildReadBack(sentences: string[], out: ReadBackInput): ReadBackRow[] {
   const rows: ReadBackRow[] = sentences.map((sentence, index) => {
-    const kinds = [...new Set(rules.provenance.filter((p) => p.sentence === sentence).map((p) => p.rule))];
-    const ws = warnings.filter((w) => w.sentence === sentence).map((w) => ({ kind: w.kind, message: w.message }));
-    const unsupported = ws.some((w) => w.kind === "unsupported");
-    return {
-      index,
-      sentence,
-      rules: kinds.map((kind) => ({ kind, summary: ruleSummary(kind, rules) })),
-      warnings: ws,
-      status: unsupported ? (kinds.length ? "partial" : "unsupported") : kinds.length ? "mapped" : "unsupported",
+    const labels = out.applied.filter((l) => l.index === index);
+    const checks = [...new Set(out.platform.filter((p) => p.index === index).map((p) => p.check))];
+    const ws = out.warnings.filter((w) => w.sentence === sentence);
+    const unsupported = ws.filter((w) => w.kind === "unsupported");
+    const conflicts = ws.filter((w) => w.kind === "conflict").map((w) => ({ kind: "conflict" as const, message: w.message }));
+    const base = {
+      index, sentence,
+      rules: labels.map((l) => ({ kind: l.kind, summary: labelSummary(l.kind, l.set, l.as) })),
+      platformChecks: checks.map((check) => ({ check, summary: PLATFORM_CHECK_TEXT[check] })),
     };
+    // Something from this sentence counts: rules first, then platform checks. Anything
+    // else in it becomes a note, never a second, contradictory status.
+    if (labels.length || checks.length) {
+      const partial = unsupported.map((w) => ({ kind: "partial" as const, message: `Part of this sentence was not applied: ${REASON_TEXT[w.reason ?? "unsupported_requirement"]}.` }));
+      const notes = [...conflicts, ...partial];
+      const status: RowStatus = labels.length ? (notes.length ? "applied_with_note" : "applied") : "platform_check";
+      return { ...base, status, notes, reason: null, reasonText: null };
+    }
+    const reason = unsupported[0]?.reason ?? "not_labelled";
+    return { ...base, status: "not_applied", notes: conflicts, reason, reasonText: REASON_TEXT[reason] };
   });
-  for (const w of warnings.filter((x) => !x.sentence))
-    rows.push({ index: null, sentence: "", rules: [], warnings: [{ kind: w.kind, message: w.message }], status: "note" });
+  for (const w of out.warnings.filter((x) => !x.sentence))
+    rows.push({ index: null, sentence: "", status: "note", rules: [], platformChecks: [], notes: [{ kind: w.kind === "conflict" ? "conflict" : "default", message: w.message }], reason: null, reasonText: null });
   return rows;
 }
+
+// Sentences that produced nothing at all; the only ones counted in the Studio's banner.
+export const notAppliedCount = (rows: ReadBackRow[]) => rows.filter((r) => r.status === "not_applied").length;

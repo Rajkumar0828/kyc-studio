@@ -2,13 +2,15 @@ import { z } from "zod";
 import { getPolicyCompiler } from "@/src/lib/ai";
 import { metaSettings } from "@/src/lib/ai/meta";
 import type { AiCallRecord } from "@/src/lib/ai/recordAiCall";
-import { WarningKind, buildReadBack, CompileRecord } from "@/src/lib/policy/readBack";
+import { WarningKind, buildReadBack, CompileRecord, UnsupportedReasonSchema } from "@/src/lib/policy/readBack";
 import { checkCompileInput } from "@/src/lib/policy/compileCore";
 import { signCompile } from "@/src/lib/policy/compileToken";
 import { CompiledRules } from "@/src/lib/policy/schema";
 import { errorResponse, protect } from "@/src/lib/security/guard";
 
-const Warnings = z.array(z.object({ kind: WarningKind, sentence: z.string().max(1000).optional(), message: z.string().max(300) }).strict()).max(100);
+const Warnings = z.array(z.object({
+  kind: WarningKind, sentence: z.string().max(1000).optional(), message: z.string().max(400), reason: UnsupportedReasonSchema.optional(),
+}).strict()).max(100);
 const sum = (xs: Array<number | null>) => (xs.some((x) => x !== null) ? xs.reduce<number>((a, x) => a + (x ?? 0), 0) : null);
 
 // POST { text }: English policy -> rules, read-back table and call details.
@@ -38,7 +40,7 @@ export async function POST(req: Request) {
       usage: calls.length
         ? { inputTokens: sum(calls.map((c) => c.inputTokens)), outputTokens: sum(calls.map((c) => c.outputTokens)), reasoningTokens: sum(calls.map((c) => c.reasoningTokens)), latencyMs: sum(calls.map((c) => c.latencyMs)) }
         : null,
-      rows: buildReadBack(out.sentences, rules, warnings),
+      rows: buildReadBack(out.sentences, { applied: out.applied, platform: out.platform, warnings }),
       compiledAt: new Date().toISOString(),
     });
     return Response.json({ rules, warnings, compile, token: signCompile({ sourceText: text, rules, compile }) });

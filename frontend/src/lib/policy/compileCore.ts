@@ -12,23 +12,69 @@ export class CompileInputError extends Error {}
 export type Rules = Omit<CompiledRules, "provenance">;
 export type Setter = Partial<Rules>;
 
+// Why a sentence (or part of one) was not applied. Mapped to plain English in the UI.
+export const UNSUPPORTED_REASONS = ["vague_no_number", "unsupported_requirement", "not_a_policy_requirement", "negated_requirement", "not_labelled"] as const;
+export type UnsupportedReason = (typeof UNSUPPORTED_REASONS)[number];
+export const REASON_TEXT: Record<UnsupportedReason, string> = {
+  vague_no_number: "no specific number or period is stated",
+  unsupported_requirement: "the platform doesn't support this kind of requirement",
+  not_a_policy_requirement: "this isn't a requirement the platform can apply",
+  negated_requirement: "it makes a document optional or not required, which the platform doesn't support",
+  not_labelled: "the compiler didn't label this sentence",
+};
+export const notAppliedText = (r: UnsupportedReason, detail?: string) => `Not applied: ${REASON_TEXT[r]}${detail ? ` (${detail})` : ""}.`;
+
+// Checks the platform always performs, whatever the policy says. A sentence
+// asking for one creates no rule; the read-back says so.
+export const PLATFORM_CHECKS = ["name_match", "address_match", "id_not_expired"] as const;
+export type PlatformCheck = (typeof PLATFORM_CHECKS)[number];
+export const PLATFORM_CHECK_TEXT: Record<PlatformCheck, string> = {
+  name_match: "Names must match across documents",
+  address_match: "Addresses must match across documents",
+  id_not_expired: "The ID must not have expired",
+};
+const AGREE = /\b(match(es|ing)?|same|consistent|agree(s)?|identical|correspond(s)?)\b/i;
+const PLATFORM_GROUNDING: Record<PlatformCheck, (s: string) => boolean> = {
+  name_match: (s) => /\bnames?\b/i.test(s) && AGREE.test(s),
+  address_match: (s) => /\baddress(es)?\b/i.test(s) && AGREE.test(s),
+  id_not_expired: (s) => /\b(expir\w*|valid|in date|out of date)\b/i.test(s) && /\b(ids?|passports?|licen[cs]es?|identity|documents?)\b/i.test(s),
+};
+// True when the sentence itself is about that check (keyword grounding).
+export const isPlatformCheckGrounded = (sentence: string, check: PlatformCheck) => PLATFORM_GROUNDING[check](sentence);
+export const platformChecksIn = (sentence: string) => PLATFORM_CHECKS.filter((c) => PLATFORM_GROUNDING[c](sentence));
+
 export interface CompileWarning {
   kind: "unsupported" | "conflict" | "default";
   sentence?: string;
   message: string;
+  reason?: UnsupportedReason; // unsupported warnings only
 }
 
-// A supported rule found in one sentence.
+// A supported rule found in one sentence. `as` is the period as written when
+// code converted it to days (e.g. "3 months").
 export interface Label {
   index: number;
   kind: RuleKind;
   set: Setter;
+  as?: string;
+}
+export interface AppliedLabel extends Label {
+  conflict: boolean; // an earlier sentence already set this, so its value is not used
 }
 // A sentence (or part of one) that produced no rule, and why.
 export interface Unsupported {
   index: number;
-  reason: string;
+  reason: UnsupportedReason;
+  detail?: string;
 }
+export interface PlatformLabel {
+  index: number;
+  check: PlatformCheck;
+}
+
+// "3 months" for a period code converted to days; undefined when written in days.
+export const periodAsWritten = (n: number, unit: "days" | "weeks" | "months" | "years") =>
+  unit === "days" ? undefined : `${n} ${n === 1 ? unit.slice(0, -1) : unit}`;
 
 export const splitSentences = (text: string) =>
   text.split(/(?<=[.;!?])\s+|\n+/).map((s) => s.replace(/^[\s\-*•\d.)]+/, "").trim()).filter((s) => s.length > 1);
@@ -146,42 +192,55 @@ const DEFAULT_NOTES: Array<[keyof Rules, string]> = [
   ["retentionDays", "No retention period stated; default applied: 365 days."],
 ];
 
-export const NOT_LABELLED = "Not labelled by the compiler; it was ignored.";
+export const NOT_LABELLED = notAppliedText("not_labelled");
+
+export interface Assembled {
+  rules: CompiledRules;
+  warnings: CompileWarning[];
+  applied: AppliedLabel[]; // every rule label, in sentence order, with its conflict flag
+  platform: PlatformLabel[];
+}
 
 // Labelled sentences -> rules + warnings, deterministically. Sentences are
 // processed in order and the first value of a setting wins; every sentence with
-// neither a label nor an unsupported note is reported as not labelled.
-export function assemble(sentences: string[], labels: Label[], unsupported: Unsupported[]): { rules: CompiledRules; warnings: CompileWarning[] } {
+// no rule, no platform check and no unsupported note is reported as not labelled.
+export function assemble(sentences: string[], labels: Label[], unsupported: Unsupported[], platform: PlatformLabel[] = []): Assembled {
   const rules: Rules = { ...DEFAULTS, requiredDocuments: [] };
   const provenance: CompiledRules["provenance"] = [];
   const warnings: CompileWarning[] = [];
+  const applied: AppliedLabel[] = [];
   const setBy = new Map<string, string>(); // setting -> sentence that set it
 
   sentences.forEach((sentence, index) => {
     const mine = labels.filter((l) => l.index === index);
     const notes = unsupported.filter((u) => u.index === index);
-    for (const { kind, set } of mine) {
-      provenance.push({ rule: kind, sentence: sentence.slice(0, 500) });
-      for (const [key, value] of Object.entries(set) as Array<[keyof Rules, unknown]>) {
+    for (const label of mine) {
+      let conflict = false;
+      provenance.push({ rule: label.kind, sentence: sentence.slice(0, 500) });
+      for (const [key, value] of Object.entries(label.set) as Array<[keyof Rules, unknown]>) {
         if (key === "requiredDocuments") {
           for (const doc of value as Rules["requiredDocuments"]) {
-            if (rules.requiredDocuments.some((d) => d.label === doc.label))
-              warnings.push({ kind: "conflict", sentence, message: `${doc.label} is already required by an earlier sentence; kept the first.` });
-            else rules.requiredDocuments.push(doc);
+            if (rules.requiredDocuments.some((d) => d.label === doc.label)) {
+              conflict = true;
+              warnings.push({ kind: "conflict", sentence, message: `${doc.label} is already required by an earlier sentence; the first is used.` });
+            } else rules.requiredDocuments.push(doc);
           }
           continue;
         }
         const prev = setBy.get(key);
         if (prev !== undefined && JSON.stringify(rules[key]) !== JSON.stringify(value)) {
-          warnings.push({ kind: "conflict", sentence, message: `Conflicts with an earlier sentence ("${prev}"); kept the first value.` });
+          conflict = true;
+          warnings.push({ kind: "conflict", sentence, message: `Conflicts with an earlier sentence ("${prev}"); the earlier value is used.` });
           continue;
         }
         (rules as Record<string, unknown>)[key] = value;
         setBy.set(key, sentence);
       }
+      applied.push({ ...label, conflict });
     }
-    for (const n of notes) warnings.push({ kind: "unsupported", sentence, message: n.reason });
-    if (!mine.length && !notes.length) warnings.push({ kind: "unsupported", sentence, message: NOT_LABELLED });
+    for (const n of notes) warnings.push({ kind: "unsupported", sentence, message: notAppliedText(n.reason, n.detail), reason: n.reason });
+    if (!mine.length && !notes.length && !platform.some((p) => p.index === index))
+      warnings.push({ kind: "unsupported", sentence, message: NOT_LABELLED, reason: "not_labelled" });
   });
 
   if (!rules.requiredDocuments.length) {
@@ -197,5 +256,5 @@ export function assemble(sentences: string[], labels: Label[], unsupported: Unsu
     warnings.push({ kind: "default", message: "Auto-approval not mentioned; default applied: risk scores of 25 or lower are auto-approved." });
   for (const [key, note] of DEFAULT_NOTES) if (!setBy.has(key)) warnings.push({ kind: "default", message: note });
 
-  return { rules: { ...rules, provenance }, warnings };
+  return { rules: { ...rules, provenance }, warnings, applied, platform };
 }

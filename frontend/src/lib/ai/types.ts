@@ -47,6 +47,8 @@ export interface CompileOutput {
   rules: CompiledRules;
   warnings: import("../policy/compileCore").CompileWarning[];
   sentences: string[]; // as split by code; the read-back table has one row per sentence
+  applied: import("../policy/compileCore").AppliedLabel[]; // rule labels per sentence, with conflict flags
+  platform: import("../policy/compileCore").PlatformLabel[]; // platform checks per sentence (no rules)
   attempts: number; // 2 when the first model answer failed validation and was retried
 }
 

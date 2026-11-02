@@ -9,7 +9,7 @@ import {
 } from "../src/lib/ai/metaPolicyCompiler";
 import { CompileInputError, NOT_LABELLED, quantitiesIn } from "../src/lib/policy/compileCore";
 import { EXAMPLE_PROMPTS } from "../src/lib/policy/defaults";
-import { buildReadBack } from "../src/lib/policy/readBack";
+import { buildReadBack, CompileRecord, notAppliedCount } from "../src/lib/policy/readBack";
 
 let failed = 0;
 async function test(name: string, fn: () => Promise<void> | void) {
@@ -23,7 +23,7 @@ async function test(name: string, fn: () => Promise<void> | void) {
 }
 
 type It = { index: number; rule: string; docTypes?: string[]; number?: number; unit?: string; negated?: boolean };
-const item = (i: It) => ({ docTypes: [], number: -1, unit: "none", negated: false, ...i });
+const item = (i: It & { check?: string; reason?: string }) => ({ docTypes: [], number: -1, unit: "none", negated: false, check: "none", reason: "none", ...i });
 const ok = (content: unknown): ChatResult => ({ content: JSON.stringify(content), finishReason: "stop", usage: { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 } });
 const PREFLIGHT_OK = ok({ items: [{ rule: "a", n: 1, ok: true }] });
 
@@ -126,9 +126,9 @@ async function main() {
   await test("a multi-rule sentence yields several rules in one read-back row", async () => {
     const text = "Applicants must be at least 21 years old and must provide a selfie.";
     const { out } = await compile(text, [{ items: [item({ index: 0, rule: "min_age", number: 21 }), item({ index: 0, rule: "selfie_required" })] }]);
-    const rows = buildReadBack(out.sentences, out.rules, out.warnings);
+    const rows = buildReadBack(out.sentences, out);
     assert.deepEqual(rows[0].rules.map((r) => r.kind), ["min_age", "selfie_required"]);
-    assert.equal(rows[0].status, "mapped");
+    assert.equal(rows[0].status, "applied");
   });
 
   await test("a sentence the model skipped is added by code as unsupported (not labelled)", async () => {
@@ -136,7 +136,9 @@ async function main() {
     const w = out.warnings.find((x) => /at least 18/.test(x.sentence ?? ""))!;
     assert.equal(w.kind, "unsupported");
     assert.equal(w.message, NOT_LABELLED);
-    assert.equal(buildReadBack(out.sentences, out.rules, out.warnings)[1].status, "unsupported");
+    const row = buildReadBack(out.sentences, out)[1];
+    assert.equal(row.status, "not_applied");
+    assert.equal(row.reason, "not_labelled");
   });
 
   await test("retry: invalid labels are fed back once, then the corrected answer is used", async () => {
@@ -237,21 +239,120 @@ async function main() {
 
   await test("an unstated retention period shows a visible 'default applied' note", async () => {
     const { out } = await compile("Require a passport.", [{ items: [item({ index: 0, rule: "require_identity_doc", docTypes: ["passport"] })] }]);
-    const rows = buildReadBack(out.sentences, out.rules, out.warnings);
-    assert.ok(rows.some((r) => r.status === "note" && /retention period stated; default applied: 365 days/.test(r.warnings[0].message)));
+    const rows = buildReadBack(out.sentences, out);
+    assert.ok(rows.some((r) => r.status === "note" && /retention period stated; default applied: 365 days/.test(r.notes[0].message)));
   });
 
   await test("read-back renderer is deterministic", () => {
     const text = "Require a passport. Screen applicants against sanctions lists. Applicants must be at least 21 years old.";
-    const { rules, warnings, sentences } = compileEnglish(text);
-    const a = buildReadBack(sentences, rules, warnings);
-    assert.deepEqual(a, buildReadBack(sentences, rules, warnings));
+    const out = compileEnglish(text);
+    const a = buildReadBack(out.sentences, out);
+    assert.deepEqual(a, buildReadBack(out.sentences, out));
+    const none = { platformChecks: [], notes: [], reason: null, reasonText: null };
     assert.deepEqual(a.slice(0, 3), [
-      { index: 0, sentence: "Require a passport.", rules: [{ kind: "require_identity_doc", summary: "Require a government photo ID: Passport" }], warnings: [], status: "mapped" },
-      { index: 1, sentence: "Screen applicants against sanctions lists.", rules: [], warnings: [{ kind: "unsupported", message: "Not a supported rule; it was ignored." }], status: "unsupported" },
-      { index: 2, sentence: "Applicants must be at least 21 years old.", rules: [{ kind: "min_age", summary: "Minimum age 21" }], warnings: [], status: "mapped" },
+      { index: 0, sentence: "Require a passport.", status: "applied", rules: [{ kind: "require_identity_doc", summary: "Require a government photo ID: Passport" }], ...none },
+      {
+        index: 1, sentence: "Screen applicants against sanctions lists.", status: "not_applied", rules: [], platformChecks: [], notes: [],
+        reason: "unsupported_requirement", reasonText: "the platform doesn't support this kind of requirement",
+      },
+      { index: 2, sentence: "Applicants must be at least 21 years old.", status: "applied", rules: [{ kind: "min_age", summary: "Minimum age 21" }], ...none },
     ]);
     assert.ok(a.slice(3).every((r) => r.status === "note" && r.index === null));
+  });
+
+  await test("name- and address-match sentences are platform checks, not unsupported, and not counted in the banner", async () => {
+    const text = "Require a passport. The applicant's name must match on all documents. Addresses must be consistent across documents.";
+    const { out } = await compile(text, [{
+      items: [
+        item({ index: 0, rule: "require_identity_doc", docTypes: ["passport"] }),
+        item({ index: 1, rule: "platform_check", check: "name_match" }),
+        item({ index: 2, rule: "platform_check", check: "address_match" }),
+      ],
+    }]);
+    const rows = buildReadBack(out.sentences, out);
+    assert.deepEqual(rows.slice(1, 3).map((r) => [r.status, r.platformChecks[0].check, r.rules.length]), [["platform_check", "name_match", 0], ["platform_check", "address_match", 0]]);
+    assert.equal(out.warnings.some((w) => w.kind === "unsupported"), false);
+    assert.equal(notAppliedCount(rows), 0);
+    // The mock compiler recognises the same sentences.
+    const mock = compileEnglish(text);
+    assert.deepEqual(buildReadBack(mock.sentences, mock).slice(1, 3).map((r) => r.status), ["platform_check", "platform_check"]);
+  });
+
+  await test("'has not expired' gives a rule plus the ID-expiry platform check, never 'not supported'", async () => {
+    const { out } = await compile("Require a passport that has not expired.", [{
+      items: [item({ index: 0, rule: "require_identity_doc", docTypes: ["passport"] }), item({ index: 0, rule: "platform_check", check: "id_not_expired" })],
+    }]);
+    const row = buildReadBack(out.sentences, out)[0];
+    assert.equal(row.status, "applied");
+    assert.equal(row.platformChecks[0].check, "id_not_expired");
+    assert.equal(row.reasonText, null);
+  });
+
+  await test("a platform check the sentence doesn't describe is not applied", async () => {
+    const { out } = await compile("Require a selfie.", [{ items: [item({ index: 0, rule: "platform_check", check: "name_match" })] }]);
+    const row = buildReadBack(out.sentences, out)[0];
+    assert.equal(row.status, "not_applied");
+    assert.equal(row.reason, "unsupported_requirement");
+  });
+
+  await test("an accepted 'need not' negation reads 'not applied' with reason negated_requirement", async () => {
+    const { out } = await compile("Applicants need not provide a utility bill.", [{ items: [item({ index: 0, rule: "require_address_doc", docTypes: ["utility_bill"], negated: true })] }]);
+    const row = buildReadBack(out.sentences, out)[0];
+    assert.equal(row.status, "not_applied");
+    assert.equal(row.reason, "negated_requirement");
+    assert.match(out.warnings[0].message, /^Not applied: /);
+  });
+
+  await test("months and years converted to days are shown as written", async () => {
+    const { out } = await compile("Require proof of address. Proof of address must be no older than three months. Keep customer data for 2 years.", [{
+      items: [
+        item({ index: 0, rule: "require_address_doc" }),
+        item({ index: 1, rule: "poa_max_age", number: 3, unit: "months" }),
+        item({ index: 2, rule: "retention", number: 2, unit: "years" }),
+      ],
+    }]);
+    const rows = buildReadBack(out.sentences, out);
+    assert.equal(rows[1].rules[0].summary, "Proof of address issued within 3 months (stored as 90 days)");
+    assert.equal(rows[2].rules[0].summary, "Keep data for 2 years (stored as 730 days)");
+    const mock = compileEnglish("Keep customer data for 5 years.");
+    assert.equal(buildReadBack(mock.sentences, mock)[0].rules[0].summary, "Keep data for 5 years (stored as 1825 days)");
+  });
+
+  await test("no sentence ever shows a rule and 'not applied'; the banner counts only not-applied sentences", async () => {
+    const text = "Require a passport. Utility bills must be no older than three months. Screen applicants against sanctions lists. Names must match. Applicants need not provide a bank statement.";
+    const { out } = await compile(text, [{
+      items: [
+        item({ index: 0, rule: "require_identity_doc", docTypes: ["passport"] }),
+        item({ index: 1, rule: "poa_max_age", number: 3, unit: "months" }),
+        item({ index: 1, rule: "unsupported", reason: "unsupported_requirement" }),
+        item({ index: 2, rule: "unsupported", reason: "unsupported_requirement" }),
+        item({ index: 3, rule: "platform_check", check: "name_match" }),
+        item({ index: 4, rule: "require_address_doc", docTypes: ["bank_statement"], negated: true }),
+      ],
+    }]);
+    const rows = buildReadBack(out.sentences, out);
+    for (const r of rows) {
+      if (r.rules.length || r.platformChecks.length) assert.ok(r.status !== "not_applied" && r.reasonText === null, `row ${r.index}`);
+      if (r.status === "not_applied") assert.equal(r.rules.length + r.platformChecks.length, 0);
+    }
+    assert.equal(rows[1].status, "applied_with_note"); // the rule plus a note, not "not supported"
+    assert.match(rows[1].notes[0].message, /^Part of this sentence was not applied/);
+    assert.deepEqual(rows.slice(0, 5).map((r) => r.status), ["applied", "applied_with_note", "not_applied", "platform_check", "not_applied"]);
+    assert.equal(notAppliedCount(rows), 2);
+  });
+
+  await test("read-back rows stored before statuses existed are upgraded on read", () => {
+    const legacy = {
+      provider: "mock", model: null, effort: null, attempts: 1, calls: 0, usage: null, compiledAt: new Date().toISOString(),
+      rows: [
+        { index: 0, sentence: "Require a passport.", rules: [{ kind: "require_identity_doc", summary: "x" }], warnings: [], status: "mapped" },
+        { index: 1, sentence: "Be nice.", rules: [], warnings: [{ kind: "unsupported", message: "Not a supported rule; it was ignored." }], status: "unsupported" },
+        { index: null, sentence: "", rules: [], warnings: [{ kind: "default", message: "default applied" }], status: "note" },
+      ],
+    };
+    const rec = CompileRecord.parse(legacy);
+    assert.deepEqual(rec.rows.map((r) => r.status), ["applied", "not_applied", "note"]);
+    assert.equal(rec.rows[1].reason, "unsupported_requirement");
   });
 
   console.log(failed ? `\n${failed} failed` : "\nall passed");

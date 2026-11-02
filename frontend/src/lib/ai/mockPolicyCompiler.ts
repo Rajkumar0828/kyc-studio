@@ -1,4 +1,7 @@
-import { assemble, checkCompileInput, splitSentences, type Label, type Setter, type Unsupported } from "../policy/compileCore";
+import {
+  assemble, checkCompileInput, periodAsWritten, platformChecksIn, quantitiesIn, splitSentences, toDays as unitToDays,
+  type Label, type PlatformLabel, type Setter, type Unsupported,
+} from "../policy/compileCore";
 import type { RealDocType, RuleKind } from "../policy/schema";
 import type { PolicyCompiler } from "./types";
 
@@ -68,22 +71,35 @@ const MATCHERS: Record<RuleKind, (s: string) => Setter | null> = {
 
 export { splitSentences };
 
-// Each sentence is matched by every rule-kind pattern; the shared core assembles the result.
+// The period as written ("5 years") when code stored it as days, for the read-back.
+function writtenPeriod(sentence: string, days: number | undefined) {
+  if (days === undefined) return undefined;
+  const q = quantitiesIn(sentence).find((x) => x.unit && unitToDays(x.value, x.unit) === days);
+  return q?.unit ? periodAsWritten(q.value, q.unit) : undefined;
+}
+
+// Each sentence is matched by every rule-kind pattern and the platform-check
+// keywords; the shared core assembles the result.
 export function compileEnglish(text: string) {
   const sentences = splitSentences(text);
   const labels: Label[] = [];
   const unsupported: Unsupported[] = [];
+  const platform: PlatformLabel[] = [];
   sentences.forEach((sentence, index) => {
     let matched = false;
     for (const [kind, match] of Object.entries(MATCHERS) as Array<[RuleKind, (s: string) => Setter | null]>) {
       const set = match(sentence);
       if (!set) continue;
       matched = true;
-      labels.push({ index, kind, set });
+      labels.push({ index, kind, set, as: writtenPeriod(sentence, set.proofOfAddressMaxAgeDays ?? set.retentionDays) });
     }
-    if (!matched) unsupported.push({ index, reason: "Not a supported rule; it was ignored." });
+    for (const check of platformChecksIn(sentence)) {
+      matched = true;
+      platform.push({ index, check });
+    }
+    if (!matched) unsupported.push({ index, reason: "unsupported_requirement" });
   });
-  return { ...assemble(sentences, labels, unsupported), sentences };
+  return { ...assemble(sentences, labels, unsupported, platform), sentences };
 }
 
 export const mockPolicyCompiler: PolicyCompiler = {
