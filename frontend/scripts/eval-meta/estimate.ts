@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import { buildRequest, META_PROMPTS, META_SCHEMAS, type ChatRequest, type MetaProviderOptions, type MetaStep } from "../../src/lib/ai/meta";
+import { buildRequest, META_PROMPTS, META_SCHEMAS, type ChatRequest, type MetaProviderOptions, type MetaStep, type PipelineStep } from "../../src/lib/ai/meta";
 import type { InputFile } from "../../src/lib/ai/types";
 import { getMeta } from "../../src/lib/meta/client";
 import { decide, scoreRisk } from "../../src/lib/pipeline/risk";
@@ -50,7 +50,7 @@ export interface CaseForPlan {
 
 export function planCase(c: CaseForPlan, opts: MetaProviderOptions): PlannedCall[] {
   const calls: PlannedCall[] = [];
-  const add = (step: MetaStep, basis: PlannedCall["basis"], text: string, doc: CaseForPlan["docs"][number] | null) =>
+  const add = (step: PipelineStep, basis: PlannedCall["basis"], text: string, doc: CaseForPlan["docs"][number] | null) =>
     calls.push({ caseId: c.caseId, doc: doc?.name ?? null, step, basis, body: buildRequest(step, META_SCHEMAS[step], text, doc?.file, opts) });
 
   if (c.qualityChecks.length) {

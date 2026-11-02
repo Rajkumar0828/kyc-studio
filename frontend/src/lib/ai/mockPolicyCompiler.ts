@@ -1,12 +1,10 @@
-import type { CompiledRules, RealDocType, RuleKind } from "../policy/schema";
-import type { CompileWarning, PolicyCompiler } from "./types";
+import { assemble, checkCompileInput, splitSentences, type Label, type Setter, type Unsupported } from "../policy/compileCore";
+import type { RealDocType, RuleKind } from "../policy/schema";
+import type { PolicyCompiler } from "./types";
 
 // Deterministic English -> rules mapper over the closed RuleKind vocabulary.
 // Each sentence is matched against simple patterns; anything that matches no
 // rule kind is reported, never guessed.
-
-type Rules = Omit<CompiledRules, "provenance">;
-type Setter = Partial<Rules>;
 
 const REQUIRE = /\b(require[sd]?|must (provide|upload|submit|show)|needs? to (provide|upload|submit)|ask for|collect)\b/i;
 const NEGATE = /\b(no|not|never|don'?t|without|skip|optional)\b/i;
@@ -68,78 +66,30 @@ const MATCHERS: Record<RuleKind, (s: string) => Setter | null> = {
   },
 };
 
-const DEFAULTS: Rules = {
-  requiredDocuments: [],
-  minAge: 18,
-  proofOfAddressMaxAgeDays: 90,
-  selfieRequired: true,
-  authorityLookup: true,
-  autoApproveEnabled: true,
-  autoApproveMaxScore: 25,
-  retentionDays: 365,
-};
-const DEFAULT_NOTES: Array<[RuleKind, string]> = [
-  ["min_age", "No minimum age stated; using 18."],
-  ["selfie_required", "Selfie not mentioned; requiring one."],
-  ["authority_lookup", "Registry check not mentioned; enabling it."],
-  ["retention", "No retention period stated; using 365 days."],
-];
+export { splitSentences };
 
-export const splitSentences = (text: string) =>
-  text.split(/(?<=[.;!?])\s+|\n+/).map((s) => s.replace(/^[\s\-*•\d.)]+/, "").trim()).filter((s) => s.length > 1);
-
-export function compileEnglish(text: string): { rules: CompiledRules; warnings: CompileWarning[] } {
-  const rules: Rules = { ...DEFAULTS, requiredDocuments: [] };
-  const provenance: CompiledRules["provenance"] = [];
-  const warnings: CompileWarning[] = [];
-  const setBy = new Map<string, string>(); // setting -> sentence that set it
-
-  for (const sentence of splitSentences(text)) {
+// Each sentence is matched by every rule-kind pattern; the shared core assembles the result.
+export function compileEnglish(text: string) {
+  const sentences = splitSentences(text);
+  const labels: Label[] = [];
+  const unsupported: Unsupported[] = [];
+  sentences.forEach((sentence, index) => {
     let matched = false;
     for (const [kind, match] of Object.entries(MATCHERS) as Array<[RuleKind, (s: string) => Setter | null]>) {
       const set = match(sentence);
       if (!set) continue;
       matched = true;
-      provenance.push({ rule: kind, sentence: sentence.slice(0, 500) });
-      for (const [key, value] of Object.entries(set) as Array<[keyof Rules, unknown]>) {
-        if (key === "requiredDocuments") {
-          for (const doc of value as Rules["requiredDocuments"]) {
-            if (rules.requiredDocuments.some((d) => d.label === doc.label))
-              warnings.push({ kind: "conflict", sentence, message: `${doc.label} is already required by an earlier sentence; kept the first.` });
-            else rules.requiredDocuments.push(doc);
-          }
-          continue;
-        }
-        const prev = setBy.get(key);
-        if (prev !== undefined && JSON.stringify(rules[key]) !== JSON.stringify(value)) {
-          warnings.push({ kind: "conflict", sentence, message: `Conflicts with an earlier sentence ("${prev}"); kept the first value.` });
-          continue;
-        }
-        (rules as Record<string, unknown>)[key] = value;
-        setBy.set(key, sentence);
-      }
+      labels.push({ index, kind, set });
     }
-    if (!matched) warnings.push({ kind: "unsupported", sentence, message: "Not a supported rule; it was ignored." });
-  }
-
-  if (!rules.requiredDocuments.length) {
-    rules.requiredDocuments.push({ label: "Government photo ID", anyOf: ["passport", "drivers_license", "national_id"] });
-    warnings.push({ kind: "default", message: "No document requirement found; requiring a government photo ID." });
-  }
-  const hasAddressDoc = rules.requiredDocuments.some((d) => d.label === "Proof of address");
-  if (hasAddressDoc && !setBy.has("proofOfAddressMaxAgeDays"))
-    warnings.push({ kind: "default", message: "No age limit for proof of address; using 90 days." });
-  if (!hasAddressDoc && setBy.has("proofOfAddressMaxAgeDays"))
-    warnings.push({ kind: "conflict", message: "A proof-of-address age limit is set but no proof of address is required." });
-  if (!setBy.has("autoApproveEnabled"))
-    warnings.push({ kind: "default", message: "Auto-approval not mentioned; auto-approving risk scores of 25 or lower." });
-  const keyFor: Partial<Record<RuleKind, keyof Rules>> = { min_age: "minAge", selfie_required: "selfieRequired", authority_lookup: "authorityLookup", retention: "retentionDays" };
-  for (const [kind, note] of DEFAULT_NOTES) if (!setBy.has(keyFor[kind]!)) warnings.push({ kind: "default", message: note });
-
-  return { rules: { ...rules, provenance }, warnings };
+    if (!matched) unsupported.push({ index, reason: "Not a supported rule; it was ignored." });
+  });
+  return { ...assemble(sentences, labels, unsupported), sentences };
 }
 
 export const mockPolicyCompiler: PolicyCompiler = {
   name: "mock",
-  compile: async (text) => compileEnglish(text),
+  compile: async (text) => {
+    checkCompileInput(text);
+    return { ...compileEnglish(text), attempts: 1 };
+  },
 };

@@ -1,4 +1,5 @@
 import { getCustomerGuide } from "../ai";
+import { metaSettings } from "../ai/meta";
 import { templateSteps } from "../ai/mockCustomerGuide";
 import { JOURNEY_STEPS } from "../ai/types";
 import { aiBudgetLeft } from "../security/aiBudget";
@@ -23,8 +24,9 @@ export async function generateGuide(spec: PolicySpec): Promise<StoredGuide> {
     const steps = await guide.stepHelp(spec);
     const parsed = StoredGuide.shape.steps.safeParse(Object.fromEntries(JOURNEY_STEPS.map((s) => [s, steps[s]])));
     if (!parsed.success) return fallback("the generated wording was incomplete");
-    const mock = guide.name === "mock";
-    return { steps: parsed.data, source: mock ? "template" : "ai", provider: guide.name, model: null, effort: null, note: null, generatedAt: now };
+    if (guide.name === "mock") return { steps: parsed.data, source: "template", provider: "mock", model: null, effort: null, note: null, generatedAt: now };
+    const settings = metaSettings();
+    return { steps: parsed.data, source: "ai", provider: guide.name, model: settings.model, effort: settings.reasoningEffort.guide, note: null, generatedAt: now };
   } catch (e) {
     return fallback(e instanceof Error ? e.message : String(e));
   }

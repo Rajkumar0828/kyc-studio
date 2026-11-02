@@ -15,12 +15,15 @@ import { api, postJson } from "@/src/lib/client/api";
 import { EXAMPLE_PROMPTS } from "@/src/lib/policy/defaults";
 import { docList, RULE_LABEL } from "@/src/lib/policy/labels";
 import { defaultConsentText, type CompiledRules, type PolicySpec, type RuleKind } from "@/src/lib/policy/schema";
+import type { CompileRecord } from "@/src/lib/policy/readBack";
 import type { PolicyDraft, PolicyVersion } from "@/src/lib/policy/store/types";
 
 interface Compiled {
   rules: CompiledRules;
   warnings: CompileWarning[];
   provider: string; // "saved" when loaded from a stored policy
+  compile: CompileRecord | null;
+  token: string; // signed by the server; required to save these rules
 }
 
 const pickRules = (r: CompiledRules): CompiledRules => {
@@ -54,8 +57,8 @@ export function PolicyStudio({ editId }: { editId?: string }) {
   // Editing an existing policy: start from its draft, else its latest published version.
   useEffect(() => {
     if (!editId) return;
-    api<{ published: PolicyVersion | null; draft: PolicyDraft | null; nextVersion: number }>(`/api/policies/${editId}`)
-      .then(({ published: pub, draft, nextVersion: nv }) => {
+    api<{ published: PolicyVersion | null; draft: PolicyDraft | null; nextVersion: number; draftToken: string | null; publishedToken: string | null }>(`/api/policies/${editId}`)
+      .then(({ published: pub, draft, nextVersion: nv, draftToken, publishedToken }) => {
         setNextVersion(nv);
         const p = draft ?? pub?.spec;
         if (!p) return;
@@ -64,7 +67,7 @@ export function PolicyStudio({ editId }: { editId?: string }) {
         setText(p.sourceText);
         setConsent(p.consentText);
         setConsentEdited(true);
-        setCompiled({ rules: pickRules("rules" in p ? p.rules : p), warnings: [], provider: "saved" });
+        setCompiled({ rules: pickRules("rules" in p ? p.rules : p), warnings: [], provider: "saved", compile: draft ? draft.compile : pub?.compile ?? null, token: (draft ? draftToken : publishedToken) ?? "" });
         setCompiledText(p.sourceText);
         if (draft) setSaved(draft);
       })
@@ -82,8 +85,8 @@ export function PolicyStudio({ editId }: { editId?: string }) {
     setBusy("compile");
     setError(null);
     try {
-      const r = await postJson<Compiled>("/api/policies/compile", { text });
-      setCompiled(r);
+      const r = await postJson<Omit<Compiled, "provider">>("/api/policies/compile", { text });
+      setCompiled({ ...r, provider: r.compile?.provider ?? "mock" });
       setCompiledText(text);
       setDirty(true);
       if (!consentEdited) setConsent(defaultConsentText(r.rules.retentionDays));
@@ -102,7 +105,7 @@ export function PolicyStudio({ editId }: { editId?: string }) {
       const { draft } = await postJson<{ draft: PolicyDraft }>("/api/policies", {
         id: editId ?? saved?.id,
         name, customerCategory: category, sourceText: text, consentText: consent,
-        rules: pickRules(compiled.rules), compile: null,
+        rules: pickRules(compiled.rules), compile: compiled.compile, compileToken: compiled.token,
       });
       setSaved(draft);
       setDirty(false);

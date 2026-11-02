@@ -41,17 +41,20 @@ export interface AiProvider {
   customerGuidance(issues: string[]): Promise<string>;
 }
 
-export interface CompileWarning {
-  kind: "unsupported" | "conflict" | "default";
-  sentence?: string;
-  message: string;
+export type { CompileWarning } from "../policy/compileCore";
+
+export interface CompileOutput {
+  rules: CompiledRules;
+  warnings: import("../policy/compileCore").CompileWarning[];
+  sentences: string[]; // as split by code; the read-back table has one row per sentence
+  attempts: number; // 2 when the first model answer failed validation and was retried
 }
 
 // English policy text -> rules from the closed RuleKind vocabulary. Output is
 // untrusted: API routes validate it with CompiledRules before use.
 export interface PolicyCompiler {
   name: string;
-  compile(text: string): Promise<{ rules: CompiledRules; warnings: CompileWarning[] }>;
+  compile(text: string): Promise<CompileOutput>;
 }
 
 export const JOURNEY_STEPS = ["consent", "tour", "documents", "selfie", "review", "result"] as const;

@@ -1,6 +1,9 @@
 import { createHash, timingSafeEqual } from "node:crypto";
 import { ZodError } from "zod";
 import { ProviderUnavailable } from "../ai";
+import { MetaOutputTruncated } from "../ai/meta";
+import { CompilePreflightError, CompileValidationError } from "../ai/metaPolicyCompiler";
+import { CompileInputError } from "../policy/compileCore";
 import { PolicyStoreError } from "../policy/store";
 import { AiBudgetExceeded, aiBudgetLeft } from "./aiBudget";
 
@@ -82,6 +85,10 @@ export function errorResponse(e: unknown, fallback = "Request failed"): Response
   if (e instanceof ZodError) return json(422, "The data did not match the expected schema.", "invalid_data");
   if (e instanceof PolicyStoreError) return json(e.status, e.message, "policy_store");
   if (e instanceof ProviderUnavailable) return json(503, e.message, "provider_unavailable");
+  if (e instanceof CompileInputError) return json(400, e.message, "compile_input");
+  if (e instanceof CompileValidationError) return json(502, `${e.message}. Nothing was compiled; try again or rephrase the policy.`, "compile_invalid");
+  if (e instanceof CompilePreflightError) return json(502, e.message, "compile_preflight");
+  if (e instanceof MetaOutputTruncated) return json(502, `The model's answer was cut off at ${e.maxCompletionTokens} tokens (step ${e.step}). Shorten the text or try again.`, "output_truncated");
   console.error(e);
   return json(500, fallback, "error");
 }

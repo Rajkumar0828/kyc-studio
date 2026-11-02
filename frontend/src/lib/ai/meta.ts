@@ -9,8 +9,10 @@ import type { AiProvider, Extraction, InputFile } from "./types";
 // Untested until credits arrive: run scripts/day1.ts first, then flip AI_PROVIDER=meta.
 const clamp = (n: number) => Math.min(1000, Math.max(0, Math.round(n)));
 
-export const META_STEPS = ["doc_class", "extraction", "compare", "summary", "guidance"] as const;
+export const META_STEPS = ["doc_class", "extraction", "compare", "summary", "guidance", "compile", "compile_preflight", "guide"] as const;
 export type MetaStep = (typeof META_STEPS)[number];
+// The steps the verification pipeline uses (AiProvider).
+export type PipelineStep = "doc_class" | "extraction" | "compare" | "summary" | "guidance";
 
 // "none" is rejected by Muse Spark (HTTP 400), so it is not offered.
 export const REASONING_EFFORTS = ["minimal", "low", "medium", "high", "xhigh", "max"] as const;
@@ -39,14 +41,21 @@ export class MetaOutputTruncated extends Error {
   }
 }
 
-// Defaults: low effort for every step (extraction was medium until the
-// repeatability experiment showed low is enough); caps generous enough that
-// structured JSON is not truncated. Env overrides: META_EFFORT_CLASSIFY,
-// META_EFFORT_EXTRACT, META_EFFORT_OTHER (compare, summary, guidance).
-const DEFAULT_EFFORT: Record<MetaStep, ReasoningEffort> = { doc_class: "low", extraction: "low", compare: "low", summary: "low", guidance: "low" };
-const DEFAULT_MAX_TOKENS: Record<MetaStep, number> = { doc_class: 2000, extraction: 4000, compare: 2000, summary: 2000, guidance: 2000 };
+// Defaults: low effort for the pipeline steps (extraction was medium until the
+// repeatability experiment showed low is enough), medium for policy compiling,
+// low for guide wording; caps generous enough that structured JSON is not
+// truncated. Env overrides: META_EFFORT_CLASSIFY, META_EFFORT_EXTRACT,
+// META_EFFORT_OTHER (compare, summary, guidance), META_EFFORT_COMPILE (compile
+// and its preflight), META_EFFORT_GUIDE.
+const DEFAULT_EFFORT: Record<MetaStep, ReasoningEffort> = {
+  doc_class: "low", extraction: "low", compare: "low", summary: "low", guidance: "low", compile: "medium", compile_preflight: "medium", guide: "low",
+};
+const DEFAULT_MAX_TOKENS: Record<MetaStep, number> = {
+  doc_class: 2000, extraction: 4000, compare: 2000, summary: 2000, guidance: 2000, compile: 6000, compile_preflight: 2000, guide: 2000,
+};
 const EFFORT_ENV: Record<MetaStep, string> = {
   doc_class: "META_EFFORT_CLASSIFY", extraction: "META_EFFORT_EXTRACT", compare: "META_EFFORT_OTHER", summary: "META_EFFORT_OTHER", guidance: "META_EFFORT_OTHER",
+  compile: "META_EFFORT_COMPILE", compile_preflight: "META_EFFORT_COMPILE", guide: "META_EFFORT_GUIDE",
 };
 
 function envEffort(step: MetaStep): ReasoningEffort | undefined {
@@ -69,6 +78,15 @@ export const sendChatCompletion: ChatSend = async (body) => {
   const res = await getMeta().chat.completions.create(body);
   return { content: res.choices[0]?.message.content ?? null, finishReason: res.choices[0]?.finish_reason ?? null, usage: res.usage };
 };
+
+// One structured call: build, send (through the wrapper if any), stop on a
+// truncated answer, parse the JSON. Shared by every Meta-backed component.
+export async function callMetaJson(step: MetaStep, schema: object, text: string, opts: MetaProviderOptions = {}, file?: InputFile): Promise<unknown> {
+  const body = buildRequest(step, schema, text, file, opts);
+  const res = opts.call ? await opts.call(step, body, sendChatCompletion) : await sendChatCompletion(body);
+  if (res.finishReason === "length") throw new MetaOutputTruncated(step, body.max_completion_tokens);
+  return JSON.parse(res.content ?? "{}");
+}
 
 // Builds the chat request for a step. Exported so the eval can estimate tokens for the exact same body.
 export function buildRequest(step: MetaStep, schema: object, text: string, file: InputFile | undefined, opts: MetaProviderOptions = {}): ChatRequest {
@@ -113,7 +131,7 @@ export const META_SCHEMAS = {
   },
   summary: { type: "object", properties: { summary: { type: "string" } }, required: ["summary"], additionalProperties: false },
   guidance: { type: "object", properties: { message: { type: "string" } }, required: ["message"], additionalProperties: false },
-} satisfies Record<MetaStep, object>;
+} satisfies Record<PipelineStep, object>;
 
 export const META_PROMPTS = {
   doc_class: () => "Classify this KYC document. Use unknown if it is none of the listed types. confidence is 0-1.",
@@ -135,12 +153,8 @@ export const META_PROMPTS = {
 };
 
 export function createMetaProvider(opts: MetaProviderOptions = {}): AiProvider {
-  async function jsonCall<T>(step: MetaStep, parse: (v: unknown) => T, text: string, file?: InputFile): Promise<T> {
-    const body = buildRequest(step, META_SCHEMAS[step], text, file, opts);
-    const res = opts.call ? await opts.call(step, body, sendChatCompletion) : await sendChatCompletion(body);
-    if (res.finishReason === "length") throw new MetaOutputTruncated(step, body.max_completion_tokens);
-    return parse(JSON.parse(res.content ?? "{}"));
-  }
+  const jsonCall = async <T,>(step: PipelineStep, parse: (v: unknown) => T, text: string, file?: InputFile): Promise<T> =>
+    parse(await callMetaJson(step, META_SCHEMAS[step], text, opts, file));
 
   return {
     name: "meta",
