@@ -1,7 +1,7 @@
 import { getPolicyCompiler } from "@/src/lib/ai";
 import { z } from "zod";
 import { CompiledRules } from "@/src/lib/policy/schema";
-import { errorResponse, metered, protect } from "@/src/lib/security/guard";
+import { errorResponse, protect } from "@/src/lib/security/guard";
 
 // POST { text }: English policy -> rules + warnings. The compiler's output is
 // validated here whichever provider produced it.
@@ -19,7 +19,7 @@ export async function POST(req: Request) {
   if (text.length > 4000) return Response.json({ error: "Policy text is limited to 4000 characters." }, { status: 400 });
   try {
     const compiler = getPolicyCompiler();
-    const { rules, warnings } = await metered(compiler).compile(text);
+    const { rules, warnings } = await compiler.compile(text);
     return Response.json({ rules: CompiledRules.parse(rules), warnings: Warnings.parse(warnings), provider: compiler.name });
   } catch (e) {
     return errorResponse(e, "Could not compile the policy");

@@ -17,6 +17,7 @@ import {
   createMetaProvider, metaSettings, MetaOutputTruncated, REASONING_EFFORTS, sendChatCompletion,
   type ChatRequest, type MetaProviderOptions, type MetaStep, type ReasoningEffort,
 } from "../../src/lib/ai/meta";
+import { recordAiCall } from "../../src/lib/ai/recordAiCall";
 import { matchSpecimen } from "../../src/lib/ai/specimens";
 import type { InputFile } from "../../src/lib/ai/types";
 import { qualityProblems } from "../../src/lib/pipeline/quality";
@@ -229,7 +230,16 @@ async function main() {
     caseId: () => currentCase,
     repeat: () => currentRepeat,
     docFor: (h) => docName.get(h) ?? null,
-    onRecord: (r) => records.push(r),
+    onRecord: (r) => {
+      records.push(r);
+      // Live calls also go to the app-wide AI call log (metadata only).
+      if (!r.cached)
+        recordAiCall({
+          at: new Date().toISOString(), source: "eval", step: r.step, model: r.model, effort: r.effort, inputTokens: r.inputTokens,
+          outputTokens: r.outputTokens, reasoningTokens: r.reasoningTokens, cachedInputTokens: r.cachedInputTokens, latencyMs: r.latencyMs,
+          finishReason: r.finishReason, error: r.error ? "Error" : null, caseId: r.caseId,
+        });
+    },
   });
   const counter = createCounter(path.join(CACHE, "counts"));
 

@@ -1,7 +1,7 @@
 import { getCustomerGuide } from "../ai";
 import { templateSteps } from "../ai/mockCustomerGuide";
 import { JOURNEY_STEPS } from "../ai/types";
-import { aiBudgetLeft, metered } from "../security/aiBudget";
+import { aiBudgetLeft } from "../security/aiBudget";
 import type { PolicySpec } from "./schema";
 import { StoredGuide } from "./store/types";
 
@@ -19,8 +19,8 @@ export async function generateGuide(spec: PolicySpec): Promise<StoredGuide> {
   });
   if (!aiBudgetLeft()) return fallback("the daily AI call cap has been reached");
   try {
-    const guide = getCustomerGuide();
-    const steps = await metered(guide).stepHelp(spec);
+    const guide = getCustomerGuide({ policyId: spec.id });
+    const steps = await guide.stepHelp(spec);
     const parsed = StoredGuide.shape.steps.safeParse(Object.fromEntries(JOURNEY_STEPS.map((s) => [s, steps[s]])));
     if (!parsed.success) return fallback("the generated wording was incomplete");
     const mock = guide.name === "mock";

@@ -12,7 +12,7 @@
     "lint": "eslint",
     "specimens": "npm run generate --prefix ../eval/generator",
     "eval:meta": "tsx --env-file=.env.local scripts/eval-meta/run.ts",
-    "test:policy": "tsx scripts/policy-compiler-test.ts && tsx scripts/policy-store-test.ts",
+    "test:policy": "tsx scripts/policy-compiler-test.ts && tsx scripts/policy-store-test.ts && tsx scripts/ai-call-log-test.ts",
     "test:eval": "tsx scripts/eval-score-test.ts && tsx scripts/eval-cache-test.ts && tsx scripts/expiry-rule-test.ts && tsx scripts/eval-overlay-test.ts"
   },
   "dependencies": {

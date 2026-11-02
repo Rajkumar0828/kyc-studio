@@ -6,7 +6,7 @@ import { consoleSink } from "@/src/lib/audit/logger";
 import { runPipeline } from "@/src/lib/pipeline/run";
 import { DocType } from "@/src/lib/policy/schema";
 import { getPolicyStore } from "@/src/lib/policy/store";
-import { errorResponse, metered, protect } from "@/src/lib/security/guard";
+import { errorResponse, protect } from "@/src/lib/security/guard";
 
 const MAX_FILES = 5, MAX_BYTES = 10 * 1024 * 1024;
 
@@ -44,7 +44,7 @@ export async function POST(req: Request, ctx: RouteContext<"/api/apply/[policyId
   const consentRaw = String(form.get("consentAt") ?? "");
   const consentAt = !isNaN(Date.parse(consentRaw)) ? new Date(consentRaw).toISOString() : null;
   try {
-    const guide = getCustomerGuide(); // resolve before any AI spend
+    const guide = getCustomerGuide({ caseId, policyId: policy.id }); // resolve before any AI spend
     const documents = await Promise.all(files.map((f, i) => toInput(f, types[i])));
     const specimen = await specimenAsOf(documents); // mock mode only
     await consoleSink({
@@ -54,7 +54,7 @@ export async function POST(req: Request, ctx: RouteContext<"/api/apply/[policyId
     const result = await runPipeline(
       { caseId, documents, selfie: selfie instanceof File && selfie.size > 0 ? await toInput(selfie) : undefined, asOf: specimen?.asOf },
       policy,
-      metered(getAi()),
+      getAi({ caseId, policyId: policy.id }),
       consoleSink,
     );
     // Recorded against the exact version evaluated.
@@ -69,7 +69,7 @@ export async function POST(req: Request, ctx: RouteContext<"/api/apply/[policyId
       caseId,
       policy: result.policy,
       decision: result.decision,
-      message: await metered(guide).resultMessage(result.decision, fixes),
+      message: await guide.resultMessage(result.decision, fixes),
       fixes,
       provider: result.provider,
       guideProvider: guide.name,

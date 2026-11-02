@@ -5,7 +5,7 @@ import { getApplicationLog } from "@/src/lib/applications/log";
 import { consoleSink } from "@/src/lib/audit/logger";
 import { getPolicyStore } from "@/src/lib/policy/store";
 import { runPipeline } from "@/src/lib/pipeline/run";
-import { errorResponse, metered, protect } from "@/src/lib/security/guard";
+import { errorResponse, protect } from "@/src/lib/security/guard";
 
 const toInput = async (f: File): Promise<InputFile> => ({
   filename: f.name,
@@ -27,18 +27,19 @@ export async function POST(req: Request) {
   const selfie = form.get("selfie");
 
   const submittedAt = new Date().toISOString();
+  const caseId = `case-${Date.now().toString(36)}`;
   try {
     const documents = await Promise.all(docs.map(toInput));
     const specimen = await specimenAsOf(documents); // mock mode only
     const result = await runPipeline(
       {
-        caseId: `case-${Date.now().toString(36)}`,
+        caseId,
         documents,
         selfie: selfie instanceof File && selfie.size > 0 ? await toInput(selfie) : undefined,
         asOf: specimen?.asOf,
       },
       policy,
-      metered(getAi()),
+      getAi({ caseId, policyId: policy.id }),
       consoleSink, // switch to mongoSink() once cases are persisted
     );
     await getApplicationLog().record({
