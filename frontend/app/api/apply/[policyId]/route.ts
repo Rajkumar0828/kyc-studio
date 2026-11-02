@@ -2,7 +2,8 @@ import { getAi, getCustomerGuide } from "@/src/lib/ai";
 import { specimenAsOf } from "@/src/lib/ai/specimens";
 import type { InputFile } from "@/src/lib/ai/types";
 import { getApplicationLog } from "@/src/lib/applications/log";
-import { consoleSink } from "@/src/lib/audit/logger";
+import { randomUUID } from "node:crypto";
+import { getAuditLog, pipelineAuditSink } from "@/src/lib/audit";
 import { runPipeline } from "@/src/lib/pipeline/run";
 import { DocType } from "@/src/lib/policy/schema";
 import { getPolicyStore } from "@/src/lib/policy/store";
@@ -39,7 +40,8 @@ export async function POST(req: Request, ctx: RouteContext<"/api/apply/[policyId
   if (files.length > MAX_FILES) return Response.json({ error: `Upload at most ${MAX_FILES} documents.` }, { status: 400 });
   if ([...files, selfie].some((f) => f instanceof File && f.size > MAX_BYTES)) return Response.json({ error: "Each file must be 10 MB or smaller." }, { status: 413 });
 
-  const caseId = `apply-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
+  // A random UUID: never derived from a name, document number or time.
+  const caseId = randomUUID();
   const submittedAt = new Date().toISOString();
   const consentRaw = String(form.get("consentAt") ?? "");
   const consentAt = !isNaN(Date.parse(consentRaw)) ? new Date(consentRaw).toISOString() : null;
@@ -47,15 +49,14 @@ export async function POST(req: Request, ctx: RouteContext<"/api/apply/[policyId
     const guide = getCustomerGuide({ caseId, policyId: policy.id }); // resolve before any AI spend
     const documents = await Promise.all(files.map((f, i) => toInput(f, types[i])));
     const specimen = await specimenAsOf(documents); // mock mode only
-    await consoleSink({
-      caseId, actor: "customer", action: "consent_given", at: new Date(),
-      detail: { policy: `${policy.id}@v${policy.version}`, consentAt: String(form.get("consentAt") ?? ""), retentionDays: policy.retentionDays },
-    });
+    const audit = getAuditLog();
+    const ids = { caseId, policyId: policy.id, policyVersion: policy.version };
+    await audit.append({ type: "consent_recorded", actor: "customer", ...ids });
     const result = await runPipeline(
       { caseId, documents, selfie: selfie instanceof File && selfie.size > 0 ? await toInput(selfie) : undefined, asOf: specimen?.asOf },
       policy,
       getAi({ caseId, policyId: policy.id }),
-      consoleSink,
+      pipelineAuditSink(audit, ids),
     );
     // Recorded against the exact version evaluated.
     await getApplicationLog().record({

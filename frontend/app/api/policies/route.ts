@@ -1,6 +1,7 @@
 import { verifyCompile } from "@/src/lib/policy/compileToken";
 import { DraftInput, getPolicyStore } from "@/src/lib/policy/store";
-import { errorResponse, protect, rateLimit } from "@/src/lib/security/guard";
+import { getAuditLog } from "@/src/lib/audit";
+import { actorOf, errorResponse, protect, rateLimit } from "@/src/lib/security/guard";
 
 // GET: one summary per policy (seeds first). Read-only, so only rate limited.
 export async function GET(req: Request) {
@@ -20,6 +21,7 @@ export async function POST(req: Request) {
     if (!verifyCompile({ sourceText: input.sourceText, rules: input.rules, compile: input.compile }, compileToken))
       return Response.json({ error: "Compile the policy text again before saving; the compiled rules could not be verified.", code: "compile_required" }, { status: 400 });
     const draft = await getPolicyStore().saveDraft(input);
+    await getAuditLog().append({ type: "policy_draft_saved", actor: actorOf(req), policyId: draft.id });
     return Response.json({ draft }, { status: 201 });
   } catch (e) {
     return errorResponse(e, "Could not save the draft");

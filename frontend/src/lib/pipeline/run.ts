@@ -18,7 +18,9 @@ export async function runPipeline(input: CaseInput, policy: PolicySpec, ai: AiPr
     const reviewerSummary = await ai.summarizeForReviewer({ score, reasons, decision });
     const fixable = checks.filter((c) => c.status !== "pass" && c.category === "customer_fixable").map((c) => c.message);
     const customerMessage = decision === "request_info" ? await ai.customerGuidance(fixable) : undefined;
-    await log("decision_proposed", { decision, score, reasons }, `ai:${ai.name}`);
+    // Codes only: the reasons are free text and can contain names, dates or numbers.
+    const flagCodes = [...new Set(checks.filter((c) => c.status !== "pass").map((c) => c.code))];
+    await log("decision_proposed", { decision, score, flagCodes }, `ai:${ai.name}`);
     return { caseId: input.caseId, policy: { id: policy.id, version: policy.version }, provider: ai.name, docs, checks, score, decision, reviewerSummary, customerMessage, startedAt, finishedAt: new Date() };
   };
 

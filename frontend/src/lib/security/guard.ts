@@ -4,6 +4,7 @@ import { ProviderUnavailable } from "../ai";
 import { MetaOutputTruncated } from "../ai/meta";
 import { CompilePreflightError, CompileValidationError } from "../ai/metaPolicyCompiler";
 import { CompileInputError } from "../policy/compileCore";
+import { AuditAppendFailed } from "../audit/chain";
 import { PolicyStoreError } from "../policy/store";
 import { AiBudgetExceeded, aiBudgetLeft } from "./aiBudget";
 
@@ -82,6 +83,7 @@ export function protect(req: Request, opts: { ai?: boolean } = {}): Response | n
 // Maps errors thrown inside a guarded route to responses.
 export function errorResponse(e: unknown, fallback = "Request failed"): Response {
   if (e instanceof AiBudgetExceeded) return json(429, e.message, "ai_daily_cap");
+  if (e instanceof AuditAppendFailed) return json(503, "The change was made, but its audit event could not be written. Check the audit page.", "audit_failed");
   if (e instanceof ZodError) return json(422, "The data did not match the expected schema.", "invalid_data");
   if (e instanceof PolicyStoreError) return json(e.status, e.message, "policy_store");
   if (e instanceof ProviderUnavailable) return json(503, e.message, "provider_unavailable");
@@ -95,3 +97,6 @@ export function errorResponse(e: unknown, fallback = "Request failed"): Response
   console.error(e);
   return json(500, fallback, "error");
 }
+
+// Who did it, for the audit log. Becomes "officer:admin" once the admin code is in use.
+export const actorOf = (req: Request): "officer:demo" => (void req, "officer:demo");
