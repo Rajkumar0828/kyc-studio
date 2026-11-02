@@ -1,6 +1,7 @@
 import { getAi, getCustomerGuide } from "@/src/lib/ai";
 import { specimenAsOf } from "@/src/lib/ai/specimens";
 import type { InputFile } from "@/src/lib/ai/types";
+import { getApplicationLog } from "@/src/lib/applications/log";
 import { consoleSink } from "@/src/lib/audit/logger";
 import { runPipeline } from "@/src/lib/pipeline/run";
 import { DocType } from "@/src/lib/policy/schema";
@@ -39,6 +40,9 @@ export async function POST(req: Request, ctx: RouteContext<"/api/apply/[policyId
   if ([...files, selfie].some((f) => f instanceof File && f.size > MAX_BYTES)) return Response.json({ error: "Each file must be 10 MB or smaller." }, { status: 413 });
 
   const caseId = `apply-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
+  const submittedAt = new Date().toISOString();
+  const consentRaw = String(form.get("consentAt") ?? "");
+  const consentAt = !isNaN(Date.parse(consentRaw)) ? new Date(consentRaw).toISOString() : null;
   try {
     const guide = getCustomerGuide(); // resolve before any AI spend
     const documents = await Promise.all(files.map((f, i) => toInput(f, types[i])));
@@ -53,6 +57,11 @@ export async function POST(req: Request, ctx: RouteContext<"/api/apply/[policyId
       metered(getAi()),
       consoleSink,
     );
+    // Recorded against the exact version evaluated.
+    await getApplicationLog().record({
+      caseId, channel: "apply", policyId: result.policy.id, policyVersion: result.policy.version, decision: result.decision,
+      provider: result.provider, consentAt, submittedAt, decidedAt: new Date(result.finishedAt).toISOString(),
+    });
     const fixes = result.decision === "request_info"
       ? [...new Set(result.checks.filter((c) => c.status !== "pass" && c.category === "customer_fixable").map((c) => c.message))]
       : [];

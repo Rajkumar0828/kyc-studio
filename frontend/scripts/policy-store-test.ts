@@ -5,6 +5,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { compileEnglish } from "../src/lib/ai/mockPolicyCompiler";
+import { createFileApplicationLog } from "../src/lib/applications/log";
 import { templateSteps } from "../src/lib/ai/mockCustomerGuide";
 import { DEFAULT_POLICIES, EXAMPLE_PROMPTS } from "../src/lib/policy/defaults";
 import { createFileStore } from "../src/lib/policy/store/fileStore";
@@ -124,6 +125,18 @@ async function main() {
     };
     walk(appDir);
     assert.deepEqual(offenders, []);
+  });
+
+  await test("application log records policy id and version, and nothing personal", async () => {
+    const log = createFileApplicationLog(path.join(dir, "applications.jsonl"));
+    const rec = {
+      caseId: "apply-1", channel: "apply" as const, policyId: "housing-loan", policyVersion: 1, decision: "manual_review" as const,
+      provider: "mock", consentAt: null, submittedAt: new Date().toISOString(), decidedAt: new Date().toISOString(),
+    };
+    await log.record(rec);
+    assert.deepEqual(await log.recent(), [rec]);
+    await assert.rejects(log.record({ ...rec, fullName: "Elin Thornquist" } as typeof rec)); // strict schema: no extra fields
+    await assert.rejects(log.record({ ...rec, policyVersion: 0 }));
   });
 
   fs.rmSync(dir, { recursive: true, force: true });
