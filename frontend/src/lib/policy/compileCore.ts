@@ -13,7 +13,9 @@ export type Rules = Omit<CompiledRules, "provenance">;
 export type Setter = Partial<Rules>;
 
 // Why a sentence (or part of one) was not applied. Mapped to plain English in the UI.
-export const UNSUPPORTED_REASONS = ["vague_no_number", "unsupported_requirement", "not_a_policy_requirement", "negated_requirement", "not_labelled"] as const;
+export const UNSUPPORTED_REASONS = [
+  "vague_no_number", "unsupported_requirement", "not_a_policy_requirement", "negated_requirement", "not_labelled", "requirement_not_stated",
+] as const;
 export type UnsupportedReason = (typeof UNSUPPORTED_REASONS)[number];
 export const REASON_TEXT: Record<UnsupportedReason, string> = {
   vague_no_number: "no specific number or period is stated",
@@ -21,6 +23,7 @@ export const REASON_TEXT: Record<UnsupportedReason, string> = {
   not_a_policy_requirement: "this isn't a requirement the platform can apply",
   negated_requirement: "it makes a document optional or not required, which the platform doesn't support",
   not_labelled: "the compiler didn't label this sentence",
+  requirement_not_stated: "requirement not stated in this sentence",
 };
 export const notAppliedText = (r: UnsupportedReason, detail?: string) => `Not applied: ${REASON_TEXT[r]}${detail ? ` (${detail})` : ""}.`;
 
@@ -162,6 +165,14 @@ export const ADDRESS_TYPES_ALL: RealDocType[] = ["utility_bill", "bank_statement
 export function docTypesIn(sentence: string, category: "identity" | "address"): RealDocType[] {
   return (category === "identity" ? ID_TYPES : ADDRESS_TYPES).filter(([re]) => re.test(sentence)).map(([, t]) => t);
 }
+
+// A document requirement must be stated as one in that sentence. A document that
+// is only the subject of a limit ("Utility bills must be no older than three
+// months") does not make the document required.
+export const REQUIREMENT_LANGUAGE =
+  /\b(require[sd]?|requirement|must (?:provide|submit|upload|supply|present|show|include|send|have)|shall (?:provide|submit|upload|supply|present|include)|(?:needs?|has|have) to (?:provide|submit|upload|supply|present)|should (?:provide|submit|upload|supply|present)|ask(?:ed)? for|collect)\b/i;
+export const SELFIE_WORDING = /\bselfies?\b/i;
+export const REGISTRY_WORDING = /\b(registry|register|issuing authority|government database|authority records?)\b/i;
 
 // A sentence may switch a requirement OFF only with an explicit "not required"
 // phrase. Limits such as "no older than", "has not expired", "not later than",

@@ -197,7 +197,7 @@ async function main() {
     assert.ok(out.rules.provenance.some((p) => p.rule === "require_identity_doc"));
   });
 
-  await test("negated=true for 'no older than three months' is a validation error; the retry creates the rules", async () => {
+  await test("negated=true for 'no older than three months' is a validation error; the retry creates the age rule", async () => {
     const text = "Utility bills must be no older than three months.";
     const { out, f } = await compile(text, [
       { items: [item({ index: 0, rule: "poa_max_age", number: 3, unit: "months", negated: true }), item({ index: 0, rule: "require_address_doc", docTypes: ["utility_bill"], negated: true })] },
@@ -206,8 +206,47 @@ async function main() {
     assert.equal(out.attempts, 2);
     assert.match(f.log.filter((l) => l.step === "compile")[1].prompt, /limits such as "no older than"/);
     assert.equal(out.rules.proofOfAddressMaxAgeDays, 90);
+    // The sentence states a limit, not a requirement, so the extra require_address_doc is dropped.
+    assert.equal(out.rules.requiredDocuments.some((d) => d.label === "Proof of address"), false);
+  });
+
+  await test("a limit on a document is not a requirement: only poa_max_age plus the conflict warning", async () => {
+    const { out } = await compile("Utility bills must be no older than three months.", [{
+      items: [item({ index: 0, rule: "poa_max_age", number: 3, unit: "months" }), item({ index: 0, rule: "require_address_doc", docTypes: ["utility_bill"] })],
+    }]);
+    assert.deepEqual(out.rules.provenance.map((p) => p.rule), ["poa_max_age"]);
+    assert.equal(out.rules.proofOfAddressMaxAgeDays, 90);
+    assert.equal(out.rules.requiredDocuments.some((d) => d.label === "Proof of address"), false);
+    assert.ok(out.warnings.some((w) => w.kind === "conflict" && /age limit is set but no proof of address is required/.test(w.message)));
+    const row = buildReadBack(out.sentences, out)[0];
+    assert.equal(row.status, "applied_with_note");
+    assert.deepEqual(row.rules.map((r) => r.kind), ["poa_max_age"]);
+    assert.match(row.notes[0].message, /requirement not stated in this sentence/);
+  });
+
+  await test("'Applicants must provide a utility bill dated within 90 days' gives both rules", async () => {
+    const { out } = await compile("Applicants must provide a utility bill dated within 90 days.", [{
+      items: [item({ index: 0, rule: "require_address_doc", docTypes: ["utility_bill"] }), item({ index: 0, rule: "poa_max_age", number: 90, unit: "days" })],
+    }]);
+    assert.deepEqual(out.rules.provenance.map((p) => p.rule), ["require_address_doc", "poa_max_age"]);
     assert.deepEqual(out.rules.requiredDocuments.find((d) => d.label === "Proof of address")!.anyOf, ["utility_bill"]);
-    assert.equal(out.warnings.some((w) => w.kind === "unsupported"), false);
+    assert.equal(out.rules.proofOfAddressMaxAgeDays, 90);
+    assert.equal(out.warnings.some((w) => w.kind === "conflict" || w.kind === "unsupported"), false);
+    assert.equal(buildReadBack(out.sentences, out)[0].status, "applied");
+  });
+
+  await test("an extra rule the sentence doesn't state is dropped with the note; the stated rule is kept", async () => {
+    const { out } = await compile("Applicants must be at least 18 years old.", [{
+      items: [item({ index: 0, rule: "min_age", number: 18 }), item({ index: 0, rule: "selfie_required" }), item({ index: 0, rule: "authority_lookup" })],
+    }]);
+    assert.deepEqual(out.rules.provenance.map((p) => p.rule), ["min_age"]);
+    assert.ok(out.warnings.filter((w) => w.reason === "requirement_not_stated").length === 2);
+    const row = buildReadBack(out.sentences, out)[0];
+    assert.equal(row.status, "applied_with_note");
+    assert.ok(row.notes.every((n) => /requirement not stated in this sentence/.test(n.message)));
+    // Defaults still apply, with their visible notes.
+    assert.equal(out.rules.selfieRequired, true);
+    assert.ok(out.warnings.some((w) => w.kind === "default" && /Selfie not mentioned/.test(w.message)));
   });
 
   await test("a wrong negated flag twice fails with a clear error, never flipped silently", async () => {

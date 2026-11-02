@@ -1,7 +1,7 @@
 import { z } from "zod";
 import {
   ADDRESS_TYPES_ALL, assemble, checkCompileInput, docTypesIn, IDENTITY_TYPES, isGrounded, isPlatformCheckGrounded, NEGATION_PHRASES_DOC,
-  notAppliedText, NOT_REQUIRED, periodAsWritten, PLATFORM_CHECKS, toDays,
+  notAppliedText, NOT_REQUIRED, periodAsWritten, PLATFORM_CHECKS, REGISTRY_WORDING, REQUIREMENT_LANGUAGE, SELFIE_WORDING, toDays,
   type Label, type PlatformCheck, type PlatformLabel, type Unit, type Unsupported, type UnsupportedReason,
 } from "../policy/compileCore";
 import { RealDocType, RuleKind } from "../policy/schema";
@@ -150,6 +150,8 @@ export function groundItem(sentence: string, it: Item): Grounded {
     case "require_address_doc": {
       // negated was validated against the text: the sentence explicitly waives this document.
       if (it.negated) return { reason: "negated_requirement" };
+      // A document that is only the subject of a limit is not a requirement; drop just this item.
+      if (!REQUIREMENT_LANGUAGE.test(sentence)) return { reason: "requirement_not_stated" };
       const category = it.rule === "require_identity_doc" ? "identity" : "address";
       const named = docTypesIn(sentence, category); // only types the sentence actually names; none named = the whole category
       return {
@@ -178,8 +180,10 @@ export function groundItem(sentence: string, it: Item): Grounded {
     case "no_auto_approve":
       return { kind: it.rule, set: { autoApproveEnabled: false } };
     case "selfie_required":
+      if (!SELFIE_WORDING.test(sentence)) return { reason: "requirement_not_stated" };
       return { kind: it.rule, set: { selfieRequired: !it.negated } };
     case "authority_lookup":
+      if (!REGISTRY_WORDING.test(sentence)) return { reason: "requirement_not_stated" };
       return { kind: it.rule, set: { authorityLookup: !it.negated } };
   }
 }
