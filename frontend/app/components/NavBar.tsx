@@ -11,6 +11,8 @@ const LINKS = [
   { href: "/admin/policies", label: "Policies" },
   { href: "/apply/housing-loan", label: "Customer journey", match: "/apply" },
   { href: "/verify", label: "Developer tool" },
+  { href: "/admin/audit", label: "Audit" },
+  { href: "/admin/usage", label: "AI usage" },
 ];
 
 export function NavBar() {
