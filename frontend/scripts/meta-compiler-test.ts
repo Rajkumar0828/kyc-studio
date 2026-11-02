@@ -183,12 +183,51 @@ async function main() {
     assert.equal(out.rules.autoApproveMaxScore, 19);
   });
 
-  await test("negation comes from the text; a model flag that disagrees is unsupported", async () => {
+  await test("negated=true for 'has not expired' is a validation error; the retry creates the rule", async () => {
+    const text = "Require a passport that has not expired.";
+    const { out, f } = await compile(text, [
+      { items: [item({ index: 0, rule: "require_identity_doc", docTypes: ["passport"], negated: true })] },
+      { items: [item({ index: 0, rule: "require_identity_doc", docTypes: ["passport"], negated: false })] },
+    ]);
+    assert.equal(out.attempts, 2);
+    assert.match(f.log.filter((l) => l.step === "compile")[1].prompt, /negated=true but the sentence does not say/);
+    assert.deepEqual(out.rules.requiredDocuments[0].anyOf, ["passport"]);
+    assert.ok(out.rules.provenance.some((p) => p.rule === "require_identity_doc"));
+  });
+
+  await test("negated=true for 'no older than three months' is a validation error; the retry creates the rules", async () => {
+    const text = "Utility bills must be no older than three months.";
+    const { out, f } = await compile(text, [
+      { items: [item({ index: 0, rule: "poa_max_age", number: 3, unit: "months", negated: true }), item({ index: 0, rule: "require_address_doc", docTypes: ["utility_bill"], negated: true })] },
+      { items: [item({ index: 0, rule: "poa_max_age", number: 3, unit: "months" }), item({ index: 0, rule: "require_address_doc", docTypes: ["utility_bill"] })] },
+    ]);
+    assert.equal(out.attempts, 2);
+    assert.match(f.log.filter((l) => l.step === "compile")[1].prompt, /limits such as "no older than"/);
+    assert.equal(out.rules.proofOfAddressMaxAgeDays, 90);
+    assert.deepEqual(out.rules.requiredDocuments.find((d) => d.label === "Proof of address")!.anyOf, ["utility_bill"]);
+    assert.equal(out.warnings.some((w) => w.kind === "unsupported"), false);
+  });
+
+  await test("a wrong negated flag twice fails with a clear error, never flipped silently", async () => {
+    const bad = { items: [item({ index: 0, rule: "require_identity_doc", docTypes: ["passport"], negated: true })] };
+    const f = fake([bad, bad]);
+    await assert.rejects(f.compiler.compile("Require a passport that has not expired."), (e: unknown) => e instanceof CompileValidationError && /negated=true but the sentence does not say/.test(e.message));
+    assert.equal(f.compileCalls(), 2);
+  });
+
+  await test("'Applicants need not provide a utility bill' is an accepted negation and is not applied", async () => {
+    const { out } = await compile("Applicants need not provide a utility bill.", [{ items: [item({ index: 0, rule: "require_address_doc", docTypes: ["utility_bill"], negated: true })] }]);
+    assert.equal(out.attempts, 1);
+    assert.equal(out.rules.provenance.length, 0);
+    assert.equal(out.rules.requiredDocuments.some((d) => d.label === "Proof of address"), false);
+    assert.ok(out.warnings.some((w) => w.kind === "unsupported" && /need not provide/.test(w.sentence ?? "")));
+  });
+
+  await test("'Do not require a selfie' switches the selfie off only with negated=true", async () => {
     const off = await compile("Do not require a selfie.", [{ items: [item({ index: 0, rule: "selfie_required", negated: true })] }]);
     assert.equal(off.out.rules.selfieRequired, false);
-    const wrong = await compile("Do not require a selfie.", [{ items: [item({ index: 0, rule: "selfie_required", negated: false })] }]);
-    assert.equal(wrong.out.rules.provenance.length, 0);
-    assert.ok(wrong.out.warnings.some((w) => w.kind === "unsupported"));
+    const f = fake([{ items: [item({ index: 0, rule: "selfie_required", negated: false })] }, { items: [item({ index: 0, rule: "selfie_required", negated: false })] }]);
+    await assert.rejects(f.compiler.compile("Do not require a selfie."), CompileValidationError);
   });
 
   await test("document types come from the sentence: a generic 'photo ID' means all identity types", async () => {

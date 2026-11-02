@@ -117,7 +117,15 @@ export function docTypesIn(sentence: string, category: "identity" | "address"): 
   return (category === "identity" ? ID_TYPES : ADDRESS_TYPES).filter(([re]) => re.test(sentence)).map(([, t]) => t);
 }
 
-export const NEGATION = /\b(no|not|never|don'?t|doesn'?t|without|skip|optional)\b/i;
+// A sentence may switch a requirement OFF only with an explicit "not required"
+// phrase. Limits such as "no older than", "has not expired", "not later than",
+// "no more than", "at most" or "must not exceed" are not negations.
+export const NOT_REQUIRED =
+  /\b(need not|needn'?t|(?:is|are|be) not required|not required|no longer required|not necessary|no need|(?:do|does) not (?:require|need|check)|(?:don'?t|doesn'?t) (?:require|need|check)|optional(?:ly)?|exempt(?:ed)?|waived?|waives|forbidden|not allowed|must not (?:be required|be checked|provide|submit|upload|check))\b/i;
+export const NEGATION_PHRASES_DOC =
+  'negated=true ONLY when the sentence says a document or check is not required, optional, waived, exempt or forbidden ' +
+  '(for example "need not", "is not required", "optional", "exempt", "waived"). Validity or limit phrasings are NOT negations and ' +
+  'must use negated=false: "has not expired", "not older than", "no older than", "no more than", "not later than", "at most", "must not exceed".';
 
 // ---- assembly ----
 
