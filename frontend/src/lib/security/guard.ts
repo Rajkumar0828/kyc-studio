@@ -98,5 +98,33 @@ export function errorResponse(e: unknown, fallback = "Request failed"): Response
   return json(500, fallback, "error");
 }
 
-// Who did it, for the audit log. Becomes "officer:admin" once the admin code is in use.
-export const actorOf = (req: Request): "officer:demo" => (void req, "officer:demo");
+// ---- admin access: a SECOND secret for destructive actions ----
+// Delete customer, retention purge, seed reset and any bulk wipe need the demo
+// code AND ADMIN_ACCESS_CODE. Fails closed: unset (or equal to the demo code,
+// which would make it no second secret at all) means destructive actions are refused.
+
+export const ADMIN_COOKIE = "kyc_admin_access";
+
+const adminConfigured = () => {
+  const admin = process.env.ADMIN_ACCESS_CODE;
+  return !!admin && admin !== process.env.DEMO_ACCESS_CODE;
+};
+
+export const adminCodeMatches = (supplied: string | undefined | null) =>
+  adminConfigured() && !!supplied && timingSafeEqual(digest(supplied), digest(process.env.ADMIN_ACCESS_CODE!));
+
+export function requireAdminAccess(req: Request): Response | null {
+  const demo = requireDemoAccess(req);
+  if (demo) return demo;
+  if (!adminConfigured())
+    return json(403, "Destructive actions are disabled: ADMIN_ACCESS_CODE is not set on the server (or equals the demo code).", "admin_access_unconfigured");
+  if (adminCodeMatches(cookie(req, ADMIN_COOKIE) ?? req.headers.get("x-admin-access"))) return null;
+  return json(401, "This action needs the admin access code.", "admin_access_required");
+}
+
+// Rate limit + demo code + admin code, for destructive routes.
+export const protectAdmin = (req: Request): Response | null => rateLimit(req) ?? requireAdminAccess(req);
+
+// Who did it, for the audit log.
+export const actorOf = (req: Request): "officer:demo" | "officer:admin" =>
+  adminCodeMatches(cookie(req, ADMIN_COOKIE) ?? req.headers.get("x-admin-access")) ? "officer:admin" : "officer:demo";
