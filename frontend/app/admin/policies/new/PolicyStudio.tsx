@@ -15,6 +15,7 @@ import { api, postJson } from "@/src/lib/client/api";
 import { EXAMPLE_PROMPTS } from "@/src/lib/policy/defaults";
 import { docList, RULE_LABEL } from "@/src/lib/policy/labels";
 import { defaultConsentText, type CompiledRules, type PolicySpec, type RuleKind } from "@/src/lib/policy/schema";
+import type { PolicyDraft, PolicyVersion } from "@/src/lib/policy/store/types";
 
 interface Compiled {
   rules: CompiledRules;
@@ -42,7 +43,8 @@ export function PolicyStudio({ editId }: { editId?: string }) {
   const [consentEdited, setConsentEdited] = useState(false);
   const [compiled, setCompiled] = useState<Compiled | null>(null);
   const [compiledText, setCompiledText] = useState<string | null>(null);
-  const [saved, setSaved] = useState<PolicySpec | null>(null);
+  const [saved, setSaved] = useState<PolicyDraft | null>(null);
+  const [nextVersion, setNextVersion] = useState(1);
   const [dirty, setDirty] = useState(false); // edits since the last save
   const [published, setPublished] = useState<PolicySpec | null>(null);
   const [showJson, setShowJson] = useState(false);
@@ -52,16 +54,17 @@ export function PolicyStudio({ editId }: { editId?: string }) {
   // Editing an existing policy: start from its draft, else its latest published version.
   useEffect(() => {
     if (!editId) return;
-    api<{ published: PolicySpec | null; draft: PolicySpec | null }>(`/api/policies/${editId}`)
-      .then(({ published: pub, draft }) => {
-        const p = draft ?? pub;
+    api<{ published: PolicyVersion | null; draft: PolicyDraft | null; nextVersion: number }>(`/api/policies/${editId}`)
+      .then(({ published: pub, draft, nextVersion: nv }) => {
+        setNextVersion(nv);
+        const p = draft ?? pub?.spec;
         if (!p) return;
         setName(p.name);
         setCategory(p.customerCategory);
         setText(p.sourceText);
         setConsent(p.consentText);
         setConsentEdited(true);
-        setCompiled({ rules: pickRules(p), warnings: [], provider: "saved" });
+        setCompiled({ rules: pickRules("rules" in p ? p.rules : p), warnings: [], provider: "saved" });
         setCompiledText(p.sourceText);
         if (draft) setSaved(draft);
       })
@@ -96,12 +99,12 @@ export function PolicyStudio({ editId }: { editId?: string }) {
     setBusy("save");
     setError(null);
     try {
-      const { policy } = await postJson<{ policy: PolicySpec }>("/api/policies", {
+      const { draft } = await postJson<{ draft: PolicyDraft }>("/api/policies", {
         id: editId ?? saved?.id,
         name, customerCategory: category, sourceText: text, consentText: consent,
-        rules: pickRules(compiled.rules),
+        rules: pickRules(compiled.rules), compile: null,
       });
-      setSaved(policy);
+      setSaved(draft);
       setDirty(false);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -115,8 +118,9 @@ export function PolicyStudio({ editId }: { editId?: string }) {
     setBusy("publish");
     setError(null);
     try {
-      const { policy } = await postJson<{ policy: PolicySpec }>(`/api/policies/${saved.id}/publish`, {});
-      setPublished(policy);
+      const { policy } = await postJson<{ policy: PolicyVersion }>(`/api/policies/${saved.id}/publish`, {});
+      setPublished(policy.spec);
+      setNextVersion(policy.spec.version + 1);
       setSaved(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -127,7 +131,7 @@ export function PolicyStudio({ editId }: { editId?: string }) {
 
   const preview = compiled && {
     id: editId ?? saved?.id ?? slug(name),
-    version: saved?.version ?? "(set on save)",
+    version: `${nextVersion} (assigned on publish)`,
     status: "draft",
     name, customerCategory: category, sourceText: text, consentText: consent,
     ...compiled.rules,
@@ -135,7 +139,7 @@ export function PolicyStudio({ editId }: { editId?: string }) {
   const canSave = !!compiled && !stale && !!name.trim() && !!category.trim() && !!consent.trim() && busy === null;
   const status = published
     ? null
-    : saved && !dirty ? `Draft v${saved.version} saved. Ready to publish.` : saved ? "Unsaved changes." : compiled ? "Save a draft before publishing." : "Compile the policy first.";
+    : saved && !dirty ? `Draft saved. Publishing creates version ${nextVersion}.` : saved ? "Unsaved changes." : compiled ? "Save a draft before publishing." : "Compile the policy first.";
 
   return (
     <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">

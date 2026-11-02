@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Badge } from "@/app/components/Badge";
 import { Button } from "@/app/components/Button";
 import { Card } from "@/app/components/Card";
@@ -12,15 +12,13 @@ import { ProviderBadge } from "@/app/components/ProviderBadge";
 import { Loading } from "@/app/components/Skeleton";
 import { Stepper } from "@/app/components/Stepper";
 import type { JourneyStep } from "@/src/lib/ai/types";
-import { api, ApiError, DEMO_ACCESS_EVENT, postJson } from "@/src/lib/client/api";
+import { api, ApiError } from "@/src/lib/client/api";
 import type { Decision } from "@/src/lib/pipeline/types";
 import { DOC_LABEL, docList } from "@/src/lib/policy/labels";
 import type { DocType, PolicySpec } from "@/src/lib/policy/schema";
+import { TEMPLATE_FALLBACK_LABEL } from "@/src/lib/policy/guideLabels";
+import type { PolicyVersion, StoredGuide } from "@/src/lib/policy/store/types";
 
-interface Guide {
-  steps: Record<JourneyStep, string>;
-  provider: string;
-}
 interface FileCheck {
   state: "checking" | "ok" | "problem" | "error";
   messages: string[];
@@ -146,11 +144,17 @@ function Actions({ children }: { children: ReactNode }) {
   return <div className="mt-8 flex flex-col-reverse gap-3 sm:flex-row sm:justify-between">{children}</div>;
 }
 
+// Where the step wording came from: AI (with model), the mock template, or the template fallback.
+function GuideBadge({ guide }: { guide: StoredGuide }) {
+  if (guide.source === "template_fallback") return <Badge tone="warning" title={guide.note ?? undefined}>Guidance: {TEMPLATE_FALLBACK_LABEL}</Badge>;
+  if (guide.source === "template") return <ProviderBadge provider="mock" label="Guidance" />;
+  return <ProviderBadge provider={guide.model ? `${guide.provider} · ${guide.model}` : guide.provider} label="Guidance" />;
+}
+
 export function ApplyJourney({ policyId }: { policyId: string }) {
   const [policy, setPolicy] = useState<PolicySpec | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [guide, setGuide] = useState<Guide | null>(null);
-  const [guideError, setGuideError] = useState<string | null>(null);
+  const [guide, setGuide] = useState<StoredGuide | null>(null);
   const [stepIndex, setStepIndex] = useState(0);
   const [agreed, setAgreed] = useState(false);
   const [consentAt, setConsentAt] = useState<string | null>(null);
@@ -163,29 +167,15 @@ export function ApplyJourney({ policyId }: { policyId: string }) {
   const moved = useRef(false);
 
   useEffect(() => {
-    api<{ published: PolicySpec | null }>(`/api/policies/${policyId}`)
-      .then(({ published }) => {
-        if (!published) return setLoadError("This policy has not been published yet.");
-        setPolicy(published);
-        setSlots(published.requiredDocuments.map((d) => ({ file: null, type: d.anyOf[0], check: null })));
+    api<{ published: PolicyVersion | null; archived: boolean }>(`/api/policies/${policyId}`)
+      .then(({ published, archived }) => {
+        if (!published) return setLoadError(archived ? "This policy has been archived and no longer accepts applications." : "This policy has not been published yet.");
+        setPolicy(published.spec);
+        setGuide(published.guide);
+        setSlots(published.spec.requiredDocuments.map((d) => ({ file: null, type: d.anyOf[0], check: null })));
       })
       .catch((e) => setLoadError(e instanceof ApiError && e.status === 404 ? "There is no policy with this id." : e.message));
   }, [policyId]);
-
-  const loadGuide = useCallback(() => {
-    postJson<Guide>("/api/guide", { policyId })
-      .then((g) => {
-        setGuide(g);
-        setGuideError(null);
-      })
-      .catch((e) => setGuideError(e.message));
-  }, [policyId]);
-
-  useEffect(() => {
-    loadGuide();
-    window.addEventListener(DEMO_ACCESS_EVENT, loadGuide);
-    return () => window.removeEventListener(DEMO_ACCESS_EVENT, loadGuide);
-  }, [loadGuide]);
 
   // Move focus to the new step's heading so keyboard and screen-reader users follow along.
   useEffect(() => {
@@ -222,6 +212,7 @@ export function ApplyJourney({ policyId }: { policyId: string }) {
     setSubmitError(null);
     const form = new FormData();
     form.set("consent", "true");
+    form.set("policyVersion", String(policy!.version));
     form.set("consentAt", consentAt ?? "");
     for (const s of slots) {
       if (!s.file) continue;
@@ -259,10 +250,9 @@ export function ApplyJourney({ policyId }: { policyId: string }) {
         <div key={step} className="motion-safe:animate-step-in">
           <div className="mb-2 flex flex-wrap items-start justify-between gap-2">
             <h2 ref={heading} tabIndex={-1} className="text-xl font-semibold text-zinc-900 focus:outline-none dark:text-zinc-100">{STEP_TITLE[step]}</h2>
-            {guide && step !== "consent" && step !== "result" && <ProviderBadge provider={guide.provider} label="Guidance" />}
+            {guide && step !== "consent" && step !== "result" && <GuideBadge guide={guide} />}
           </div>
           {help && step !== "result" && <p className="mb-6 leading-relaxed text-zinc-600 dark:text-zinc-400">{help}</p>}
-          {guideError && step !== "result" && <div className="mb-6"><ErrorNotice tone="warning" title="Guidance unavailable">{guideError}</ErrorNotice></div>}
 
           {step === "consent" && (
             <>
@@ -307,7 +297,7 @@ export function ApplyJourney({ policyId }: { policyId: string }) {
                 )}
               </ul>
               <p className="mt-4 text-sm text-zinc-600 dark:text-zinc-400">You must be at least {policy.minAge} years old.</p>
-              {guide?.provider === "mock" && (
+              {guide?.source === "template" && (
                 <div className="mt-4 flex gap-3 rounded-xl border border-fuchsia-200 bg-fuchsia-50 p-3 text-sm text-fuchsia-900 dark:border-fuchsia-900 dark:bg-fuchsia-950/50 dark:text-fuchsia-200">
                   <Badge tone="mock" className="h-fit">mock</Badge>
                   <p>No model reads your files. Uploading the synthetic specimens from <code className="font-mono">eval/specimens/&lt;case&gt;/</code> returns that case&apos;s scripted outcome; other files get placeholder data.</p>

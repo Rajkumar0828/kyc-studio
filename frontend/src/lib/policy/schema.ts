@@ -60,7 +60,7 @@ export const PolicySpec = CompiledRules.extend({
   status: PolicyStatus,
   name: z.string().min(1).max(80),
   customerCategory: z.string().min(1).max(40),
-  sourceText: z.string().max(4000), // the English the rules were compiled from
+  sourceText: z.string().max(8000), // the English the rules were compiled from
   consentText: z.string().min(1).max(2000), // shown verbatim in the consent step
   createdAt: z.iso.datetime(),
   updatedAt: z.iso.datetime(),

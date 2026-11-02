@@ -2,7 +2,7 @@ import { getAi } from "@/src/lib/ai";
 import type { InputFile } from "@/src/lib/ai/types";
 import { specimenAsOf } from "@/src/lib/ai/specimens";
 import { consoleSink } from "@/src/lib/audit/logger";
-import { latestPublished } from "@/src/lib/policy/store";
+import { getPolicyStore } from "@/src/lib/policy/store";
 import { runPipeline } from "@/src/lib/pipeline/run";
 import { errorResponse, metered, protect } from "@/src/lib/security/guard";
 
@@ -18,7 +18,7 @@ export async function POST(req: Request) {
   if (denied) return denied;
 
   const form = await req.formData();
-  const policy = await latestPublished(String(form.get("policyId") ?? ""));
+  const policy = (await getPolicyStore().get(String(form.get("policyId") ?? "")))?.spec;
   if (!policy) return Response.json({ error: "Unknown policy" }, { status: 400 });
 
   const docs = form.getAll("documents").filter((v): v is File => v instanceof File && v.size > 0);

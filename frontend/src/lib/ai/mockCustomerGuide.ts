@@ -1,22 +1,28 @@
-import type { CustomerGuide } from "./types";
+import type { PolicySpec } from "../policy/schema";
+import type { CustomerGuide, JourneyStep } from "./types";
 
 // Template-based wording for the apply journey. No model involved.
 const list = (xs: string[]) => (xs.length > 1 ? `${xs.slice(0, -1).join(", ")} and ${xs.at(-1)}` : xs[0] ?? "");
+
+// Deterministic step wording from the policy. Also the fallback when AI wording is unavailable.
+export function templateSteps(policy: Pick<PolicySpec, "requiredDocuments" | "selfieRequired">): Record<JourneyStep, string> {
+  const docs = policy.requiredDocuments.map((d) => d.label.toLowerCase());
+  const needs = [...docs, ...(policy.selfieRequired ? ["a selfie"] : [])];
+  return {
+    consent: "Before we start, please read how your information will be used.",
+    tour: `You will need ${list(needs)}. It takes about five minutes.`,
+    documents: "Upload a clear photo or scan of each document: all four corners visible, no glare, text in focus.",
+    selfie: "Take a selfie facing the camera in good light, without hats or sunglasses.",
+    review: "Check that each file is the right document before you submit.",
+    result: "Here is what happens next.",
+  };
+}
 
 export const mockCustomerGuide: CustomerGuide = {
   name: "mock",
 
   async stepHelp(policy) {
-    const docs = policy.requiredDocuments.map((d) => d.label.toLowerCase());
-    const needs = [...docs, ...(policy.selfieRequired ? ["a selfie"] : [])];
-    return {
-      consent: "Before we start, please read how your information will be used.",
-      tour: `You will need ${list(needs)}. It takes about five minutes.`,
-      documents: "Upload a clear photo or scan of each document: all four corners visible, no glare, text in focus.",
-      selfie: "Take a selfie facing the camera in good light, without hats or sunglasses.",
-      review: "Check that each file is the right document before you submit.",
-      result: "Here is what happens next.",
-    };
+    return templateSteps(policy);
   },
 
   async resultMessage(decision, fixes) {

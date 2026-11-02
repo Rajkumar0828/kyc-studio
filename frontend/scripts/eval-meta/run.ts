@@ -23,7 +23,7 @@ import { qualityProblems } from "../../src/lib/pipeline/quality";
 import { runPipeline } from "../../src/lib/pipeline/run";
 import type { Check } from "../../src/lib/pipeline/types";
 import type { DocType, PolicySpec } from "../../src/lib/policy/schema";
-import { latestPublished } from "../../src/lib/policy/store";
+import { getPolicyStore } from "../../src/lib/policy/store";
 import { CallCapReached, createEvalCall, sha256, type CallRecord } from "./cache";
 import { COUNT_DISCLOSURE, createCounter, DEFAULT_PRICES, planCase, usdOf, type CaseForPlan, type PlannedCall, type Prices } from "./estimate";
 import { planExtractOnly, uniqueDocs, writeExperimentReport, type RepeatRun } from "./experiment";
@@ -195,7 +195,7 @@ async function main() {
   const loaded: LoadedCase[] = [];
   for (const entry of selected) {
     const cf = readJson<CaseFile>(`${entry.case_id}/case.json`);
-    const policy = await latestPublished(cf.policy_id);
+    const policy = (await getPolicyStore().get(cf.policy_id))?.spec;
     if (!policy) die(`${entry.case_id}: policy "${cf.policy_id}" from case.json is not published.`);
     const docs = entry.files.filter((f) => f.role === "document").map((f) => {
       const bytes = read(f.file);

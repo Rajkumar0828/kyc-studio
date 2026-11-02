@@ -2,11 +2,14 @@ import { createHash, timingSafeEqual } from "node:crypto";
 import { ZodError } from "zod";
 import { ProviderUnavailable } from "../ai";
 import { PolicyStoreError } from "../policy/store";
+import { AiBudgetExceeded, aiBudgetLeft } from "./aiBudget";
+
+export { AiBudgetExceeded, consumeAiCall, metered } from "./aiBudget";
 
 // Guards for API routes that call an AI provider or change policies:
 //   requireDemoAccess  shared demo code (DEMO_ACCESS_CODE) via cookie or header
 //   rateLimit          fixed one-minute window per client IP (RATE_LIMIT_PER_MINUTE)
-//   AI budget          daily cap on provider calls across all routes (AI_DAILY_CALL_CAP)
+//   AI budget          daily cap on AI calls (AI_DAILY_CALL_CAP), see aiBudget.ts
 // State is in memory: it resets on restart and is per server process.
 
 export const DEMO_COOKIE = "kyc_demo_access";
@@ -46,9 +49,9 @@ export function requireDemoAccess(req: Request): Response | null {
 export const clientIp = (req: Request) =>
   req.headers.get("x-forwarded-for")?.split(",")[0].trim() || req.headers.get("x-real-ip") || "local";
 
-type State = { windows: Map<string, { start: number; count: number }>; aiDay: string; aiUsed: number };
+type State = { windows: Map<string, { start: number; count: number }> };
 const g = globalThis as unknown as { _guard?: State };
-const state = (g._guard ??= { windows: new Map(), aiDay: "", aiUsed: 0 });
+const state = (g._guard ??= { windows: new Map() });
 
 export function rateLimit(req: Request): Response | null {
   const limit = env("RATE_LIMIT_PER_MINUTE", 30);
@@ -65,42 +68,11 @@ export function rateLimit(req: Request): Response | null {
   return json(429, `Too many requests; try again in ${retry} seconds.`, "rate_limited", { "Retry-After": String(retry) });
 }
 
-export class AiBudgetExceeded extends Error {
-  constructor() {
-    super("The daily limit on AI calls has been reached; try again tomorrow.");
-  }
-}
-
-const today = () => new Date().toISOString().slice(0, 10);
-function aiUsedToday() {
-  if (state.aiDay !== today()) {
-    state.aiDay = today();
-    state.aiUsed = 0;
-  }
-  return state.aiUsed;
-}
-
-// Counts one provider call against the daily cap (mock calls count too).
-export function consumeAiCall() {
-  if (aiUsedToday() >= env("AI_DAILY_CALL_CAP", 500)) throw new AiBudgetExceeded();
-  state.aiUsed++;
-}
-
-// Wraps a provider so every method call is metered.
-export function metered<T extends object>(provider: T): T {
-  return new Proxy(provider, {
-    get(target, key, receiver) {
-      const v = Reflect.get(target, key, receiver);
-      return typeof v === "function" ? (...args: unknown[]) => (consumeAiCall(), v.apply(target, args)) : v;
-    },
-  });
-}
-
 // Runs the guards for a route. Returns an error response, or null to proceed.
 export function protect(req: Request, opts: { ai?: boolean } = {}): Response | null {
   const denied = rateLimit(req) ?? requireDemoAccess(req);
   if (denied) return denied;
-  if (opts.ai && aiUsedToday() >= env("AI_DAILY_CALL_CAP", 500)) return json(429, new AiBudgetExceeded().message, "ai_daily_cap");
+  if (opts.ai && !aiBudgetLeft()) return json(429, new AiBudgetExceeded().message, "ai_daily_cap");
   return null;
 }
 

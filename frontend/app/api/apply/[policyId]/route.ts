@@ -4,7 +4,7 @@ import type { InputFile } from "@/src/lib/ai/types";
 import { consoleSink } from "@/src/lib/audit/logger";
 import { runPipeline } from "@/src/lib/pipeline/run";
 import { DocType } from "@/src/lib/policy/schema";
-import { latestPublished } from "@/src/lib/policy/store";
+import { getPolicyStore } from "@/src/lib/policy/store";
 import { errorResponse, metered, protect } from "@/src/lib/security/guard";
 
 const MAX_FILES = 5, MAX_BYTES = 10 * 1024 * 1024;
@@ -15,15 +15,21 @@ const toInput = async (f: File, declared?: string): Promise<InputFile> => {
 };
 
 // POST multipart: consent=true, consentAt, documents[] with matching documentTypes[], selfie.
-// Runs the pipeline on the latest published version. The customer gets the
-// decision and what to fix, never risk scores or integrity findings.
+// Runs the pipeline on the latest published version, which must be the version
+// the customer was shown (policyVersion). The customer gets the decision and
+// what to fix, never risk scores or integrity findings.
 export async function POST(req: Request, ctx: RouteContext<"/api/apply/[policyId]">) {
   const denied = protect(req, { ai: true });
   if (denied) return denied;
-  const policy = await latestPublished((await ctx.params).policyId);
-  if (!policy) return Response.json({ error: "Unknown or unpublished policy" }, { status: 404 });
+  const { policyId } = await ctx.params;
+  const store = getPolicyStore();
+  const current = await store.get(policyId);
+  if (!current) return Response.json({ error: (await store.isArchived(policyId)) ? "This policy has been archived." : "Unknown or unpublished policy" }, { status: 404 });
+  const policy = current.spec;
 
   const form = await req.formData();
+  if (Number(form.get("policyVersion")) !== policy.version)
+    return Response.json({ error: "This policy was updated; please reload the page.", code: "policy_version_changed" }, { status: 409 });
   if (form.get("consent") !== "true") return Response.json({ error: "Consent is required before submitting." }, { status: 400 });
   const files = form.getAll("documents").filter((v): v is File => v instanceof File && v.size > 0);
   const types = form.getAll("documentTypes").map(String);
