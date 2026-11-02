@@ -8,8 +8,9 @@ import { compileEnglish } from "../src/lib/ai/mockPolicyCompiler";
 import { createFileApplicationLog } from "../src/lib/applications/log";
 import { templateSteps } from "../src/lib/ai/mockCustomerGuide";
 import { DEFAULT_POLICIES, EXAMPLE_PROMPTS } from "../src/lib/policy/defaults";
+import { createCollectionStore, memoryCollections } from "../src/lib/policy/store/collectionStore";
 import { createFileStore } from "../src/lib/policy/store/fileStore";
-import { PolicyStoreError, specFromDraft, type StoredGuide } from "../src/lib/policy/store/types";
+import { PolicyStoreError, specFromDraft, type PolicyStore, type StoredGuide } from "../src/lib/policy/store/types";
 
 let failed = 0;
 async function test(name: string, fn: () => Promise<void> | void) {
@@ -24,14 +25,15 @@ async function test(name: string, fn: () => Promise<void> | void) {
 
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), "kyc-store-"));
 const file = path.join(dir, "policies.json");
-const store = createFileStore(file);
+
 const { rules } = compileEnglish(EXAMPLE_PROMPTS[1].text);
 const input = { name: "Student account", customerCategory: "retail", sourceText: EXAMPLE_PROMPTS[1].text, consentText: "Consent text written by the officer.", rules, compile: null };
 const guide = (steps = templateSteps(rules)): StoredGuide => ({ steps, source: "template", provider: "mock", model: null, effort: null, note: null, generatedAt: new Date().toISOString() });
 const rejects409 = (p: Promise<unknown>) => assert.rejects(p, (e: unknown) => e instanceof PolicyStoreError && e.status === 409);
 
-async function main() {
-  await test("seeds are listed and readable as published version 1", async () => {
+// Behaviour every PolicyStore implementation must share.
+async function suite(label: string, store: PolicyStore) {
+  await test(`[${label}] seeds are listed and readable as published version 1`, async () => {
     const list = await store.list();
     for (const s of DEFAULT_POLICIES) {
       const row = list.find((r) => r.id === s.id)!;
@@ -41,7 +43,7 @@ async function main() {
     }
   });
 
-  await test("a draft has no version number until published", async () => {
+  await test(`[${label}] a draft has no version number until published`, async () => {
     const draft = await store.saveDraft(input);
     assert.equal(draft.id, "student-account");
     assert.equal("version" in draft, false);
@@ -52,7 +54,7 @@ async function main() {
     assert.ok(row.draftUpdatedAt);
   });
 
-  await test("publish creates version 1 and removes the draft", async () => {
+  await test(`[${label}] publish creates version 1 and removes the draft`, async () => {
     const d = (await store.getDraft("student-account"))!;
     const v = await store.publish("student-account", { guide: guide(), version: 1, draftUpdatedAt: d.updatedAt });
     assert.equal(v.spec.version, 1);
@@ -60,7 +62,7 @@ async function main() {
     assert.equal(await store.getDraft("student-account"), null);
   });
 
-  await test("publishing again appends version 2 and leaves version 1 byte-identical", async () => {
+  await test(`[${label}] publishing again appends version 2 and leaves version 1 byte-identical`, async () => {
     const before = JSON.stringify(await store.getVersion("student-account", 1));
     const d = await store.saveDraft({ ...input, id: "student-account", consentText: "Updated consent." });
     await store.publish("student-account", { guide: guide(), version: 2, draftUpdatedAt: d.updatedAt });
@@ -69,13 +71,13 @@ async function main() {
     assert.equal((await store.get("student-account"))!.spec.consentText, "Updated consent.");
   });
 
-  await test("a publish prepared for the wrong version or a stale draft is refused", async () => {
+  await test(`[${label}] a publish prepared for the wrong version or a stale draft is refused`, async () => {
     const d = await store.saveDraft({ ...input, id: "student-account" });
     await rejects409(store.publish("student-account", { guide: guide(), version: 2, draftUpdatedAt: d.updatedAt }));
     await rejects409(store.publish("student-account", { guide: guide(), version: 3, draftUpdatedAt: "2000-01-01T00:00:00.000Z" }));
   });
 
-  await test("specFromDraft builds exactly the spec that publish stores", async () => {
+  await test(`[${label}] specFromDraft builds exactly the spec that publish stores`, async () => {
     const d = (await store.getDraft("student-account"))!;
     const now = new Date().toISOString();
     const expected = specFromDraft(d, 3, now);
@@ -83,22 +85,38 @@ async function main() {
     assert.deepEqual({ ...v.spec, updatedAt: "" }, { ...expected, updatedAt: "" });
   });
 
-  await test("seeds are read-only and can't be archived", async () => {
+  await test(`[${label}] seeds are read-only and can't be archived`, async () => {
     await rejects409(store.saveDraft({ ...input, id: "housing-loan" }));
     await rejects409(store.archive("general-account"));
   });
 
-  await test("a new policy can't reuse the name of a published one", async () => {
+  await test(`[${label}] a new policy can't reuse the name of a published one`, async () => {
     await rejects409(store.saveDraft(input));
   });
 
-  await test("archive is one-way: get returns null, versions stay readable, edits are refused", async () => {
+  await test(`[${label}] archive is one-way: get returns null, versions stay readable, edits are refused`, async () => {
     await store.archive("student-account");
     assert.equal(await store.get("student-account"), null);
     assert.equal((await store.getVersion("student-account", 1))!.spec.version, 1);
     assert.equal(await store.isArchived("student-account"), true);
     assert.equal((await store.list()).find((r) => r.id === "student-account")!.archived, true);
     await rejects409(store.saveDraft({ ...input, id: "student-account" }));
+  });
+
+}
+
+async function main() {
+  await suite("file", createFileStore(file));
+  await suite("collections (memory adapter)", createCollectionStore(memoryCollections()));
+
+  await test("[collections] two concurrent publishes of the same version: one wins, the other gets 409", async () => {
+    const store = createCollectionStore(memoryCollections());
+    const d = await store.saveDraft(input);
+    const results = await Promise.allSettled([1, 2].map(() => store.publish(d.id, { guide: guide(), version: 1, draftUpdatedAt: d.updatedAt })));
+    assert.equal(results.filter((r) => r.status === "fulfilled").length, 1);
+    const lost = results.find((r) => r.status === "rejected") as PromiseRejectedResult;
+    assert.ok(lost.reason instanceof PolicyStoreError && lost.reason.status === 409);
+    assert.deepEqual(await store.versions(d.id), [1]);
   });
 
   await test("files from before immutable versions are migrated on read", async () => {

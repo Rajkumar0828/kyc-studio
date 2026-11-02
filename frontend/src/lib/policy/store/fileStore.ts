@@ -2,7 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { z } from "zod";
 import { templateSteps } from "../../ai/mockCustomerGuide";
-import { DEFAULT_POLICIES } from "../defaults";
+import { isSeed, SEED_VERSIONS } from "./seeds";
 import { POLICY_ID, PolicySpec } from "../schema";
 import {
   PolicyDraft, PolicyStoreError, PolicyVersion, slugify, specFromDraft,
@@ -19,14 +19,6 @@ const FileShape = z.object({
 }).strict();
 type FileShape = z.infer<typeof FileShape>;
 
-const SEEDED_AT = "2026-10-01T00:00:00.000Z";
-const SEED_VERSIONS: PolicyVersion[] = DEFAULT_POLICIES.map((spec) => ({
-  spec,
-  guide: { steps: templateSteps(spec), source: "template", provider: "template", model: null, effort: null, note: null, generatedAt: SEEDED_AT },
-  compile: null,
-  publishedAt: SEEDED_AT,
-}));
-const isSeed = (id: string) => DEFAULT_POLICIES.some((p) => p.id === id);
 
 // Files written before versions became immutable held a flat array of PolicySpec records.
 function migrate(raw: unknown): FileShape {
