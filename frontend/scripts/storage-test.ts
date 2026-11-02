@@ -112,6 +112,60 @@ async function main() {
     assert.deepEqual(await vault.listKeys(), [k]);
   });
 
+  const { configWarnings, healthReport, storageRequirement, RESTART_WARNING } = await import("../src/lib/health");
+  const up = { status: "up" as const, tokenValid: true, clusterId: "c1" };
+  const allMongo = { policy: "mongo" as const, applications: "mongo" as const, aiCalls: "mongo" as const, audit: "mongo" as const };
+
+  await test("health: a consistent all-mongo setup has no warnings", () => {
+    assert.deepEqual(configWarnings(allMongo, "up", up, null), []);
+  });
+
+  await test("health: cases on mongo but audit not is flagged", () => {
+    const w = configWarnings({ ...allMongo, audit: "console" }, "up", up, null);
+    assert.ok(w.some((x) => /audit log is not \(AUDIT_LOG=console\)/.test(x)));
+  });
+
+  await test("health: cases on mongo with Vault down, sealed or a bad token are flagged", () => {
+    assert.ok(configWarnings(allMongo, "up", { status: "down", tokenValid: null, clusterId: null }, null).some((x) => /Vault is down/.test(x)));
+    assert.ok(configWarnings(allMongo, "up", { status: "sealed", tokenValid: null, clusterId: null }, null).some((x) => /Vault is sealed/.test(x)));
+    assert.ok(configWarnings(allMongo, "up", { ...up, tokenValid: false }, null).some((x) => /token .* invalid or expired/.test(x)));
+  });
+
+  await test("health: mongo switches with Mongo down, an in-memory audit chain, and a Vault restart are flagged", () => {
+    assert.ok(configWarnings(allMongo, "down", up, null).some((x) => /MongoDB is down, but policy, applications, aiCalls, audit are set to mongo/.test(x)));
+    assert.ok(configWarnings({ policy: "file", applications: "file", aiCalls: "file", audit: "memory" }, "not_configured", up, null).some((x) => /in memory/.test(x)));
+    assert.ok(configWarnings(allMongo, "up", up, RESTART_WARNING).includes(RESTART_WARNING));
+  });
+
+  await test("health: with nothing configured the report degrades instead of throwing", async () => {
+    const saved = { ...process.env };
+    for (const k of ["MONGODB_URI", "VAULT_ADDR", "VAULT_TOKEN", "POLICY_STORE", "APPLICATION_LOG", "AI_CALL_LOG", "AUDIT_LOG"]) delete process.env[k];
+    const r = await healthReport();
+    assert.equal(r.mongo, "not_configured");
+    assert.equal(r.vault.status, "not_configured");
+    assert.deepEqual(r.stores, { policy: "file", applications: "file", aiCalls: "file", audit: "console" });
+    assert.equal(r.ok, true);
+    assert.equal(storageRequirement("cases") !== null && storageRequirement("audit") !== null && storageRequirement("usage") !== null, true);
+    Object.assign(process.env, saved);
+  });
+
+  const { summarizeUsage } = await import("../src/lib/ai/usage");
+  await test("usage: totals, per-step averages and an estimated cost from list prices", () => {
+    const rec = (step: string, latencyMs: number, inputTokens: number, outputTokens: number, error: string | null = null) => ({
+      at: new Date(Date.now() + latencyMs).toISOString(), source: "app" as const, step, model: "muse-spark-1.3", effort: "low",
+      inputTokens, outputTokens, reasoningTokens: 10, cachedInputTokens: 0, latencyMs, finishReason: "stop", error,
+    });
+    const s = summarizeUsage([rec("compile", 1000, 400, 2000), rec("compile", 3000, 600, 4000), rec("extraction", 2000, 1000, 500, "Error 500")], { input: 1, cachedInput: 0, output: 2 });
+    assert.equal(s.calls, 3);
+    assert.equal(s.errors, 1);
+    assert.equal(s.inputTokens, 2000);
+    assert.equal(s.outputTokens, 6500);
+    const compile = s.steps.find((x) => x.step === "compile")!;
+    assert.deepEqual([compile.calls, compile.avgLatencyMs, compile.avgInputTokens, compile.avgOutputTokens], [2, 2000, 500, 3000]);
+    assert.ok(Math.abs(s.estimatedUsd - (2000 * 1 + 6500 * 2) / 1e6) < 1e-12);
+    assert.match(s.pricesSource, /dev\.meta\.ai/);
+  });
+
   console.log(failed ? `\n${failed} failed` : "\nall passed");
   process.exit(failed ? 1 : 0);
 }

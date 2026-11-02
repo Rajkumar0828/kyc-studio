@@ -32,29 +32,46 @@ export interface AiCallSink {
   recent(limit?: number): AiCallRecord[];
 }
 
-// In-memory ring buffer plus an append-only JSON Lines file (gitignored data/).
-// AI_CALL_LOG=memory skips the file. MongoDB arrives in a later task.
-function createDefaultSink(): AiCallSink {
+export type AiCallLogKind = "file" | "memory" | "mongo";
+export function aiCallLogKind(): AiCallLogKind {
+  const v = process.env.AI_CALL_LOG || "file";
+  if (v !== "file" && v !== "memory" && v !== "mongo") throw new Error(`AI_CALL_LOG must be file, memory or mongo; got "${v}"`);
+  return v;
+}
+
+// In-memory ring buffer, plus an append-only JSON Lines file (gitignored data/,
+// AI_CALL_LOG=file) or the ai_calls collection (AI_CALL_LOG=mongo). Writes are
+// fire-and-forget so a slow store never delays an AI call; failures log the
+// error class only.
+function createDefaultSink(kind: AiCallLogKind): AiCallSink {
   const ring: AiCallRecord[] = [];
-  const toFile = (process.env.AI_CALL_LOG || "file") === "file";
   const file = path.join(process.cwd(), "data", "ai-calls.jsonl");
+  const fail = (e: unknown) => console.error("[recordAiCall] could not write the call log:", e instanceof Error ? e.name : "error");
   return {
     write(r) {
       ring.push(r);
       if (ring.length > 500) ring.shift();
-      if (!toFile) return;
-      fs.promises.mkdir(path.dirname(file), { recursive: true })
-        .then(() => fs.promises.appendFile(file, JSON.stringify(r) + "\n"))
-        .catch((e) => console.error("[recordAiCall] could not write the call log:", e instanceof Error ? e.name : e));
+      if (kind === "file")
+        fs.promises.mkdir(path.dirname(file), { recursive: true }).then(() => fs.promises.appendFile(file, JSON.stringify(r) + "\n")).catch(fail);
+      if (kind === "mongo") import("./aiCallsMongo").then((m) => m.insertAiCall(r)).catch(fail);
     },
     recent: (limit = 50) => ring.slice(-limit),
   };
 }
 
-const g = globalThis as unknown as { _aiCallSink?: AiCallSink };
-export const aiCallSink = (): AiCallSink => (g._aiCallSink ??= createDefaultSink());
+const g = globalThis as unknown as { _aiCallSink?: AiCallSink; _aiCallSinkKind?: AiCallLogKind };
+export const aiCallSink = (): AiCallSink => {
+  const kind = aiCallLogKind();
+  if (!g._aiCallSink || (g._aiCallSinkKind && g._aiCallSinkKind !== kind)) {
+    g._aiCallSink = createDefaultSink(kind);
+    g._aiCallSinkKind = kind;
+  }
+  return g._aiCallSink;
+};
+// For tests: an explicitly set sink stays in place whatever AI_CALL_LOG says.
 export const setAiCallSink = (s: AiCallSink) => {
   g._aiCallSink = s;
+  g._aiCallSinkKind = undefined;
 };
 
 export function recordAiCall(r: AiCallRecord) {
