@@ -39,10 +39,11 @@ export class MetaOutputTruncated extends Error {
   }
 }
 
-// Defaults: low effort except extraction (medium); caps generous enough that
+// Defaults: low effort for every step (extraction was medium until the
+// repeatability experiment showed low is enough); caps generous enough that
 // structured JSON is not truncated. Env overrides: META_EFFORT_CLASSIFY,
 // META_EFFORT_EXTRACT, META_EFFORT_OTHER (compare, summary, guidance).
-const DEFAULT_EFFORT: Record<MetaStep, ReasoningEffort> = { doc_class: "low", extraction: "medium", compare: "low", summary: "low", guidance: "low" };
+const DEFAULT_EFFORT: Record<MetaStep, ReasoningEffort> = { doc_class: "low", extraction: "low", compare: "low", summary: "low", guidance: "low" };
 const DEFAULT_MAX_TOKENS: Record<MetaStep, number> = { doc_class: 2000, extraction: 4000, compare: 2000, summary: 2000, guidance: 2000 };
 const EFFORT_ENV: Record<MetaStep, string> = {
   doc_class: "META_EFFORT_CLASSIFY", extraction: "META_EFFORT_EXTRACT", compare: "META_EFFORT_OTHER", summary: "META_EFFORT_OTHER", guidance: "META_EFFORT_OTHER",
