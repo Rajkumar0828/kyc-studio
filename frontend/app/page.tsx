@@ -33,7 +33,7 @@ const HOW: Array<{ icon: IconName; title: string; body: string }> = [
 const TRUST: Array<{ icon: IconName; title: string; body: string; live: boolean }> = [
   { icon: "file", title: "Synthetic data only", body: "Fictional specimen documents with ground truth, and a demo notice on every page.", live: true },
   { icon: "scale", title: "Human final decision", body: "The pipeline never rejects on its own; integrity flags always route to manual review. A reviewer console is coming.", live: true },
-  { icon: "clipboard", title: "Audit events", body: "Every pipeline step and consent emits an audit event. In this demo they go to the server log; database storage is coming.", live: true },
+  { icon: "clipboard", title: "Audit events", body: "Every policy change, consent and pipeline step appends an event to a hash chain (ids and codes only, no personal data). With MongoDB configured, Audit in the menu verifies the chain.", live: true },
   { icon: "lock", title: "Access controls", body: "A demo access code, a per-IP rate limit and a daily cap on AI calls guard every route that uses AI or changes policies.", live: true },
   { icon: "database", title: "Encrypted per-customer storage", body: "A Vault Transit helper with one key per customer is built and tested. The app does not store uploads yet.", live: false },
 ];
