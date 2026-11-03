@@ -1,7 +1,7 @@
 import type { HTMLAttributes, ReactNode } from "react";
 import { cx } from "./cx";
 
-export const cardClass = "rounded-2xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900";
+export const cardClass = "rounded-2xl border border-zinc-200 bg-white shadow-[0_1px_2px_rgb(15_23_42/0.04),0_10px_28px_-16px_rgb(15_23_42/0.18)] dark:border-zinc-800 dark:bg-zinc-900 dark:shadow-none";
 
 export function Card({ className, padded = true, ...props }: { padded?: boolean } & HTMLAttributes<HTMLDivElement>) {
   return <div className={cx(cardClass, padded && "p-5 sm:p-6", className)} {...props} />;
