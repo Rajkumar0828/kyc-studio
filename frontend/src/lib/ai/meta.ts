@@ -47,17 +47,30 @@ export class MetaOutputTruncated extends Error {
 // are generous enough that structured JSON is not truncated.
 // Env overrides: META_EFFORT_CLASSIFY, META_EFFORT_EXTRACT,
 // META_EFFORT_OTHER (compare, summary, guidance), META_EFFORT_COMPILE (compile
-// and its preflight), META_EFFORT_GUIDE.
+// and its preflight), META_EFFORT_GUIDE. The guide cap is 6000 because at low
+// effort the model spent 1,874 reasoning tokens and hit a 2000 cap; override it
+// with META_MAX_TOKENS_GUIDE.
 const DEFAULT_EFFORT: Record<MetaStep, ReasoningEffort> = {
   doc_class: "low", extraction: "low", compare: "low", summary: "low", guidance: "low", compile: "low", compile_preflight: "low", guide: "low",
 };
 const DEFAULT_MAX_TOKENS: Record<MetaStep, number> = {
-  doc_class: 2000, extraction: 4000, compare: 2000, summary: 2000, guidance: 2000, compile: 6000, compile_preflight: 2000, guide: 2000,
+  doc_class: 2000, extraction: 4000, compare: 2000, summary: 2000, guidance: 2000, compile: 6000, compile_preflight: 2000, guide: 6000,
 };
 const EFFORT_ENV: Record<MetaStep, string> = {
   doc_class: "META_EFFORT_CLASSIFY", extraction: "META_EFFORT_EXTRACT", compare: "META_EFFORT_OTHER", summary: "META_EFFORT_OTHER", guidance: "META_EFFORT_OTHER",
   compile: "META_EFFORT_COMPILE", compile_preflight: "META_EFFORT_COMPILE", guide: "META_EFFORT_GUIDE",
 };
+
+const MAX_TOKENS_ENV: Partial<Record<MetaStep, string>> = { guide: "META_MAX_TOKENS_GUIDE" };
+
+function envMaxTokens(step: MetaStep): number | undefined {
+  const name = MAX_TOKENS_ENV[step];
+  const v = name && process.env[name];
+  if (!v) return undefined;
+  const n = Number(v);
+  if (!Number.isInteger(n) || n < 500 || n > 32000) throw new Error(`${name} must be an integer from 500 to 32000; got "${v}"`);
+  return n;
+}
 
 function envEffort(step: MetaStep): ReasoningEffort | undefined {
   const v = process.env[EFFORT_ENV[step]];
@@ -71,7 +84,7 @@ export function metaSettings(opts: MetaProviderOptions = {}) {
   return {
     model: MODEL,
     reasoningEffort: Object.fromEntries(META_STEPS.map((s) => [s, opts.reasoningEffort?.[s] ?? envEffort(s) ?? DEFAULT_EFFORT[s]])) as Record<MetaStep, ReasoningEffort>,
-    maxCompletionTokens: Object.fromEntries(META_STEPS.map((s) => [s, opts.maxCompletionTokens?.[s] ?? DEFAULT_MAX_TOKENS[s]])) as Record<MetaStep, number>,
+    maxCompletionTokens: Object.fromEntries(META_STEPS.map((s) => [s, opts.maxCompletionTokens?.[s] ?? envMaxTokens(s) ?? DEFAULT_MAX_TOKENS[s]])) as Record<MetaStep, number>,
   };
 }
 

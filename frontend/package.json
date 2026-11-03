@@ -13,7 +13,7 @@
     "lint": "eslint",
     "specimens": "npm run generate --prefix ../eval/generator",
     "eval:meta": "tsx --env-file=.env.local scripts/eval-meta/run.ts",
-    "test:policy": "tsx scripts/policy-compiler-test.ts && tsx scripts/policy-store-test.ts && tsx scripts/ai-call-log-test.ts && tsx scripts/meta-compiler-test.ts",
+    "test:policy": "tsx scripts/policy-compiler-test.ts && tsx scripts/policy-store-test.ts && tsx scripts/ai-call-log-test.ts && tsx scripts/meta-compiler-test.ts && tsx scripts/guide-fallback-test.ts",
     "test:eval": "tsx scripts/eval-score-test.ts && tsx scripts/eval-cache-test.ts && tsx scripts/expiry-rule-test.ts && tsx scripts/eval-overlay-test.ts",
     "test:storage": "tsx scripts/storage-test.ts && tsx scripts/audit-chain-test.ts && tsx scripts/access-test.ts",
     "check:dev-reload": "tsx scripts/dev-reload-check.ts"
