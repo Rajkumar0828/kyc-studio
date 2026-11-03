@@ -18,6 +18,7 @@ import { DOC_LABEL, docList } from "@/src/lib/policy/labels";
 import type { DocType, PolicySpec } from "@/src/lib/policy/schema";
 import { TEMPLATE_FALLBACK_LABEL } from "@/src/lib/policy/guideLabels";
 import type { PolicyVersion, StoredGuide } from "@/src/lib/policy/store/types";
+import { MAX_FILE_BYTES as MAX_BYTES, MAX_FILE_LABEL } from "@/src/lib/uploadLimits";
 
 interface FileCheck {
   state: "checking" | "ok" | "problem" | "error";
@@ -49,7 +50,6 @@ const STEP_TITLE: Record<JourneyStep, string> = {
 };
 const DOC_TYPES = ["image/png", "image/jpeg", "application/pdf"];
 const IMAGE_TYPES = ["image/png", "image/jpeg"];
-const MAX_BYTES = 10 * 1024 * 1024;
 
 // What the customer sees. Never a score or an integrity finding.
 const OUTCOME: Record<Decision, { title: string; icon: IconName; cls: string; iconCls: string }> = {
@@ -76,7 +76,7 @@ const OUTCOME: Record<Decision, { title: string; icon: IconName; cls: string; ic
 // Quick checks in the browser, then the server's quality gate (resolution, sharpness).
 async function checkFile(file: File, allowed: string[]): Promise<FileCheck> {
   if (!allowed.includes(file.type)) return { state: "problem", messages: [`${file.name}: please use ${allowed.includes("application/pdf") ? "a JPG, PNG or PDF" : "a JPG or PNG"} file.`] };
-  if (file.size > MAX_BYTES) return { state: "problem", messages: [`${file.name}: the file is larger than 10 MB.`] };
+  if (file.size > MAX_BYTES) return { state: "problem", messages: [`${file.name}: the file is larger than ${MAX_FILE_LABEL}.`] };
   const form = new FormData();
   form.set("file", file);
   try {
@@ -318,7 +318,7 @@ export function ApplyJourney({ policyId }: { policyId: string }) {
             <>
               <div className="flex flex-col gap-4">
                 {policy.requiredDocuments.map((d, i) => (
-                  <UploadCard key={d.label} id={`doc-${i}`} title={d.label} hint={`Accepted: ${docList(d.anyOf)} · JPG, PNG or PDF, up to 10 MB`}
+                  <UploadCard key={d.label} id={`doc-${i}`} title={d.label} hint={`Accepted: ${docList(d.anyOf)} · JPG, PNG or PDF, up to ${MAX_FILE_LABEL}`}
                     accept={DOC_TYPES} file={slots[i]?.file ?? null} check={slots[i]?.check ?? null} onPick={(f) => pickDocument(i, f)}>
                     {d.anyOf.length > 1 && (
                       <div className="mt-3 flex flex-wrap items-center gap-2 text-sm">

@@ -9,8 +9,7 @@ import { DocType } from "@/src/lib/policy/schema";
 import { getPolicyStore } from "@/src/lib/policy/store";
 import { protect } from "@/src/lib/security/guard";
 import { errorResponse } from "@/src/lib/security/errors";
-
-const MAX_FILES = 5, MAX_BYTES = 10 * 1024 * 1024;
+import { MAX_DOCUMENTS, MAX_FILE_BYTES, MAX_FILE_LABEL } from "@/src/lib/uploadLimits";
 
 const toInput = async (f: File, declared?: string): Promise<InputFile> => {
   const t = DocType.safeParse(declared);
@@ -38,8 +37,8 @@ export async function POST(req: Request, ctx: RouteContext<"/api/apply/[policyId
   const types = form.getAll("documentTypes").map(String);
   const selfie = form.get("selfie");
   if (!files.length) return Response.json({ error: "Upload at least one document." }, { status: 400 });
-  if (files.length > MAX_FILES) return Response.json({ error: `Upload at most ${MAX_FILES} documents.` }, { status: 400 });
-  if ([...files, selfie].some((f) => f instanceof File && f.size > MAX_BYTES)) return Response.json({ error: "Each file must be 10 MB or smaller." }, { status: 413 });
+  if (files.length > MAX_DOCUMENTS) return Response.json({ error: `Upload at most ${MAX_DOCUMENTS} documents.` }, { status: 400 });
+  if ([...files, selfie].some((f) => f instanceof File && f.size > MAX_FILE_BYTES)) return Response.json({ error: `Each file must be ${MAX_FILE_LABEL} or smaller.` }, { status: 413 });
 
   // A random UUID: never derived from a name, document number or time.
   const caseId = randomUUID();

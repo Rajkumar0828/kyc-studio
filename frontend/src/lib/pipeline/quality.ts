@@ -1,8 +1,9 @@
 import sharp from "sharp";
 import type { InputFile } from "../ai/types";
+import { MAX_FILE_BYTES as MAX_BYTES, MAX_FILE_LABEL } from "../uploadLimits";
 
 const ALLOWED = ["image/png", "image/jpeg", "application/pdf"];
-const MIN_BYTES = 20 * 1024, MAX_BYTES = 10 * 1024 * 1024, MIN_EDGE = 600;
+const MIN_BYTES = 20 * 1024, MIN_EDGE = 600;
 // Laplacian variance threshold, calibrated on eval/specimens (see eval/generator/README.md).
 export const SHARPNESS_EDGE = 1000, MIN_SHARPNESS = 100;
 
@@ -49,7 +50,7 @@ export async function qualityProblems(file: InputFile): Promise<string[]> {
   const p: string[] = [];
   if (!ALLOWED.includes(file.mime)) return [`${file.filename}: file type ${file.mime} is not accepted (use JPG, PNG or PDF).`];
   if (file.bytes.length < MIN_BYTES) p.push(`${file.filename}: the file is too small to read reliably.`);
-  if (file.bytes.length > MAX_BYTES) p.push(`${file.filename}: the file is larger than 10 MB.`);
+  if (file.bytes.length > MAX_BYTES) p.push(`${file.filename}: the file is larger than ${MAX_FILE_LABEL}.`);
   if (file.mime !== "application/pdf") {
     const s = imageSize(file.bytes);
     if (!s) p.push(`${file.filename}: the image could not be read.`);
