@@ -1,10 +1,28 @@
 @import "tailwindcss";
 
-/* One accent colour (indigo) on neutral zinc greys. Components use accent-*,
-   so changing the accent is a one-line edit here. */
+/* KYCite theme: navy-tinted neutrals (slate), indigo for actions (accent-*),
+   teal for highlights (brand-*). Components use zinc-*, accent-* and brand-*,
+   so the palette is changed here only.
+   Contrast: actions are accent-600 on white (AA) / accent-500 with near-black
+   text in dark mode; teal text uses brand-700 on light and brand-300 on dark. */
 @theme inline {
   --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
   --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+
+  /* Neutrals: every zinc-* utility renders as slate (a cool, navy-tinted grey). */
+  --color-zinc-50: var(--color-slate-50);
+  --color-zinc-100: var(--color-slate-100);
+  --color-zinc-200: var(--color-slate-200);
+  --color-zinc-300: var(--color-slate-300);
+  --color-zinc-400: var(--color-slate-400);
+  /* Secondary text without a dark: variant: follows the colour scheme so it
+     passes AA (4.5:1) on both the light and the navy backgrounds. */
+  --color-zinc-500: var(--neutral-500);
+  --color-zinc-600: var(--color-slate-600);
+  --color-zinc-700: var(--color-slate-700);
+  --color-zinc-800: var(--color-slate-800);
+  --color-zinc-900: var(--color-slate-900);
+  --color-zinc-950: var(--color-slate-950);
 
   --color-accent-50: var(--color-indigo-50);
   --color-accent-100: var(--color-indigo-100);
@@ -18,6 +36,22 @@
   --color-accent-900: var(--color-indigo-900);
   --color-accent-950: var(--color-indigo-950);
 
+  --color-brand-50: var(--color-teal-50);
+  --color-brand-100: var(--color-teal-100);
+  --color-brand-200: var(--color-teal-200);
+  --color-brand-300: var(--color-teal-300);
+  --color-brand-400: var(--color-teal-400);
+  --color-brand-500: var(--color-teal-500);
+  --color-brand-600: var(--color-teal-600);
+  --color-brand-700: var(--color-teal-700);
+  --color-brand-800: var(--color-teal-800);
+  --color-brand-900: var(--color-teal-900);
+  --color-brand-950: var(--color-teal-950);
+
+  /* Deep navy for the header and dark surfaces. */
+  --color-navy-900: #0f1a3a;
+  --color-navy-950: #0a1128;
+
   --color-background: var(--background);
   --color-foreground: var(--foreground);
 
@@ -30,21 +64,37 @@
 }
 
 :root {
-  --background: #fafafa;
-  --foreground: #18181b;
+  --background: #f4f6fb;
+  --foreground: #0f172a;
+  /* Decoration only (body background): a soft indigo/teal mesh and a fine ledger grid. */
+  --mesh-a: rgb(99 102 241 / 0.10);
+  --mesh-b: rgb(20 184 166 / 0.09);
+  --grid-line: rgb(15 23 42 / 0.035);
+  --neutral-500: #5b6779;
   color-scheme: light;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #09090b;
-    --foreground: #f4f4f5;
+    --background: #070c1c;
+    --foreground: #e2e8f0;
+    --mesh-a: rgb(99 102 241 / 0.16);
+    --mesh-b: rgb(20 184 166 / 0.10);
+    --grid-line: rgb(148 163 184 / 0.045);
+    --neutral-500: #8b98ad;
     color-scheme: dark;
   }
 }
 
 body {
-  background: var(--background);
+  background-color: var(--background);
+  background-image:
+    radial-gradient(60rem 32rem at 100% -10%, var(--mesh-a), transparent 70%),
+    radial-gradient(48rem 28rem at -10% 20%, var(--mesh-b), transparent 70%),
+    linear-gradient(var(--grid-line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid-line) 1px, transparent 1px);
+  background-size: 100% 100%, 100% 100%, 28px 28px, 28px 28px;
+  background-attachment: fixed;
   color: var(--foreground);
   font-family: var(--font-sans);
 }
