@@ -1,0 +1,40 @@
+# Build context is the repository root. Only frontend/ and eval/specimens are
+# needed; everything secret, generated or local stays out.
+.git
+.gitignore
+.gitattributes
+.claude
+
+# Env files anywhere (secrets come from the environment at run time)
+.env
+.env.*
+**/.env
+**/.env.*
+*.env
+**/*.env
+frontend/.env.local
+
+# Dependencies and build output (installed and built inside the image)
+node_modules
+**/node_modules
+.next
+**/.next
+frontend/next-env.d.ts
+**/*.tsbuildinfo
+
+# Local data and eval artefacts (data/ holds the local AI call log)
+data
+**/data
+eval/.cache
+eval/reports
+eval/out
+eval/generator
+
+# Not needed in the image
+docs
+docker
+docker-compose*.yml
+Dockerfile
+.dockerignore
+*.md
+**/*.log
