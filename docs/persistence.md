@@ -62,7 +62,11 @@ All three restart `unless-stopped`.
    | `ADMIN_ACCESS_CODE`   | A second secret, different from `DEMO_ACCESS_CODE`, for destructive admin actions  |
 
 5. Open `/api/health`. It reports `mongo`, `vault`, `tokenValid`, which store
-   uses which backend, and a list of warnings. `ok: true` means no warnings.
+   uses which backend, and a list of warnings. `status` is `ok` with no
+   warnings and `degraded` with any. The response is always HTTP 200, because
+   warnings are information, not a failure. Container healthchecks use
+   `/api/health/live`, which only confirms the server is answering and never
+   touches MongoDB or Vault, so a warning can't mark the app unhealthy.
 
 ## The scoped Vault token
 
@@ -84,7 +88,11 @@ What happens next:
 - Within 20 s `vault-init` recreates the Transit mount, the policy and the app
   token (same id), so new cases work again without touching the app.
 - The app records Vault's cluster id in MongoDB (`system_state`). When it
-  changes, `/api/health` shows **"Vault restarted: previous keys lost"**.
+  changes, `/api/health` shows **"Vault restarted: previous keys lost"** and
+  reports `degraded`. The warning stays on purpose until `npm run seed` has
+  repaired the demo cases, and seed clears it. Until Phase 3a adds the seed
+  command, clear it by deleting the `vault` document from the `system_state`
+  collection.
 - `npm run seed` (Phase 3a) recreates any seed case that is missing or can no
   longer be read, and leaves other cases alone. `npm run seed -- --reset --yes`
   wipes and recreates all seed cases.

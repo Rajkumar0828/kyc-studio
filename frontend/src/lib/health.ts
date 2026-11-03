@@ -7,6 +7,8 @@ import { vaultHealth, type VaultHealth } from "./vault/transit";
 
 // What /api/health reports: service status, which store each switch uses, and
 // warnings for inconsistent combinations. Never secrets or the Vault cluster id.
+// Readiness information only: warnings make the status "degraded", never a
+// failure. Container healthchecks use /api/health/live, which checks liveness only.
 
 export interface Stores {
   policy: PolicyStoreKind;
@@ -15,8 +17,11 @@ export interface Stores {
   audit: AuditKind;
 }
 
+export type HealthStatus = "ok" | "degraded";
+export const healthStatus = (warnings: string[]): HealthStatus => (warnings.length ? "degraded" : "ok");
+
 export interface HealthReport {
-  ok: boolean;
+  status: HealthStatus;
   mongo: MongoStatus;
   vault: { status: VaultHealth["status"]; tokenValid: boolean | null; restarted: string | null };
   stores: Stores;
@@ -82,7 +87,7 @@ export async function healthReport(): Promise<HealthReport> {
   const restarted = mongo === "up" && vault.status === "up" ? await vaultRestartNotice(vault.clusterId) : null;
   const warnings = configWarnings(stores, mongo, vault, restarted);
   return {
-    ok: warnings.length === 0,
+    status: healthStatus(warnings),
     mongo,
     vault: { status: vault.status, tokenValid: vault.tokenValid, restarted },
     stores,

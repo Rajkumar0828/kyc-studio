@@ -144,9 +144,22 @@ async function main() {
     assert.equal(r.mongo, "not_configured");
     assert.equal(r.vault.status, "not_configured");
     assert.deepEqual(r.stores, { policy: "file", applications: "file", aiCalls: "file", audit: "console" });
-    assert.equal(r.ok, true);
+    assert.equal(r.status, "ok");
     assert.equal(storageRequirement("cases") !== null && storageRequirement("audit") !== null && storageRequirement("usage") !== null, true);
     Object.assign(process.env, saved);
+  });
+
+  await test("health: a Vault restart warning means degraded, and liveness stays 200", async () => {
+    const { healthStatus } = await import("../src/lib/health");
+    const up = { status: "up" as const, tokenValid: true, clusterId: "c2" };
+    const allMongo = { policy: "mongo", applications: "mongo", aiCalls: "mongo", audit: "mongo" } as const;
+    assert.equal(healthStatus(configWarnings(allMongo, "up", up, RESTART_WARNING)), "degraded");
+    assert.equal(healthStatus(configWarnings(allMongo, "up", up, null)), "ok");
+    const { GET } = await import("../app/api/health/live/route");
+    const res = GET();
+    assert.equal(res.status, 200);
+    assert.deepEqual(await res.json(), { live: true });
+    assert.equal(res.headers.get("cache-control"), "no-store");
   });
 
   const { summarizeUsage } = await import("../src/lib/ai/usage");
