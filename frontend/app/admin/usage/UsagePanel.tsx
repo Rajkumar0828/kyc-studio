@@ -119,7 +119,11 @@ export function UsagePanel() {
                     <td className="px-4 py-2.5">{STEP_LABEL[r.step] ?? r.step}{r.source === "eval" && <Badge className="ml-2">eval</Badge>}</td>
                     <td className="px-4 py-2.5 tabular-nums">{n(r.inputTokens)} / {n(r.outputTokens)}</td>
                     <td className="px-4 py-2.5 tabular-nums">{r.latencyMs === null ? "–" : `${n(r.latencyMs)} ms`}</td>
-                    <td className="px-4 py-2.5">{r.error ? <Badge tone="danger">{r.error}</Badge> : <span className="text-zinc-600 dark:text-zinc-400">{r.finishReason ?? "–"}</span>}</td>
+                    <td className="px-4 py-2.5">
+                      {r.error ? <Badge tone="danger">{r.error}</Badge>
+                        : r.finishReason === "length" ? <Badge tone="danger" title="The answer hit max_completion_tokens and was unusable">cut off (length)</Badge>
+                        : <span className="text-zinc-600 dark:text-zinc-400">{r.finishReason ?? "–"}</span>}
+                    </td>
                   </tr>
                 ))}
               </tbody>

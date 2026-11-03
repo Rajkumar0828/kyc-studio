@@ -32,6 +32,10 @@ export interface UsageSummary {
   latest: AiCallRecord[];
 }
 
+// A call failed if it threw, or if the model was cut off at max_completion_tokens:
+// a truncated answer is unusable even though the request itself succeeded.
+export const isFailedCall = (r: AiCallRecord) => !!r.error || r.finishReason === "length";
+
 const avg = (xs: Array<number | null>) => {
   const v = xs.filter((x): x is number => x !== null);
   return v.length ? Math.round(v.reduce((a, b) => a + b, 0) / v.length) : null;
@@ -44,7 +48,7 @@ export function summarizeUsage(records: AiCallRecord[], prices: Prices = DEFAULT
   const steps = [...new Set(sorted.map((r) => r.step))].sort().map((step): StepUsage => {
     const rs = sorted.filter((r) => r.step === step);
     return {
-      step, calls: rs.length, errors: rs.filter((r) => r.error).length,
+      step, calls: rs.length, errors: rs.filter(isFailedCall).length,
       avgLatencyMs: avg(rs.map((r) => r.latencyMs)), avgInputTokens: avg(rs.map((r) => r.inputTokens)),
       avgOutputTokens: avg(rs.map((r) => r.outputTokens)), avgReasoningTokens: avg(rs.map((r) => r.reasoningTokens)),
       estimatedUsd: cost(rs, prices),
@@ -54,7 +58,7 @@ export function summarizeUsage(records: AiCallRecord[], prices: Prices = DEFAULT
   for (const r of sorted) me.set(`${r.model}\u0000${r.effort ?? "–"}`, (me.get(`${r.model}\u0000${r.effort ?? "–"}`) ?? 0) + 1);
   return {
     calls: sorted.length,
-    errors: sorted.filter((r) => r.error).length,
+    errors: sorted.filter(isFailedCall).length,
     inputTokens: sum(sorted.map((r) => r.inputTokens)),
     outputTokens: sum(sorted.map((r) => r.outputTokens)),
     reasoningTokens: sum(sorted.map((r) => r.reasoningTokens)),
