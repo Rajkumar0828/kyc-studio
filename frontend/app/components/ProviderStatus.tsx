@@ -26,7 +26,7 @@ export async function ProviderStatus() {
         </p>
         <p className="mt-1 text-zinc-600 dark:text-zinc-400">
           {mode === "mock" && "Mock mode: no model is called. Document reading, name comparison and customer wording come from deterministic stand-ins."}
-          {mode === "meta" && `Document classification, extraction, comparison and summaries call ${MODEL}. The policy compiler and customer guide are not available in this mode yet.`}
+          {mode === "meta" && `The policy compiler, customer step wording, document classification, extraction, comparison and summaries call ${MODEL}.`}
           {mode === "invalid" && "AI_PROVIDER must be mock or meta."}
         </p>
       </div>
