@@ -262,8 +262,12 @@ export function ApplyJourney({ policyId }: { policyId: string }) {
             <>
               {/* From the policy, written by its author; never model output. */}
               <div className="whitespace-pre-line rounded-xl bg-zinc-50 p-4 text-sm leading-relaxed text-zinc-800 dark:bg-zinc-950 dark:text-zinc-200">{policy.consentText}</div>
-              <p className="mt-4 flex items-center gap-2 text-sm text-zinc-700 dark:text-zinc-300">
-                <Icon name="lock" className="shrink-0 text-zinc-500" /> Your verification data is kept for <strong>{policy.retentionDays} days</strong>, then deleted.
+              <p className="mt-4 flex items-start gap-2 text-sm text-zinc-700 dark:text-zinc-300">
+                <Icon name="lock" className="mt-0.5 shrink-0 text-zinc-500" />
+                <span>
+                  This policy allows verification data to be kept for <strong>{policy.retentionDays} days</strong>. This demo version stores none of it:
+                  your files and details are checked and then discarded, and only a case reference and the decision are recorded.
+                </span>
               </p>
               <label className="mt-6 flex cursor-pointer items-start gap-3 rounded-xl border border-zinc-200 p-4 text-sm dark:border-zinc-800">
                 <input type="checkbox" checked={agreed} onChange={(e) => setAgreed(e.target.checked)} className="mt-0.5 h-4 w-4 accent-accent-600" />

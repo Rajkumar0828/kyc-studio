@@ -8,6 +8,7 @@ import { Icon } from "../components/Icon";
 import { PageHeader } from "../components/PageHeader";
 import { ProviderStatus } from "../components/ProviderStatus";
 import { Skeleton } from "../components/Skeleton";
+import { SpecimenFiles } from "../components/SpecimenFiles";
 
 export const metadata: Metadata = { title: "Judge guide · KYCite" };
 
@@ -39,9 +40,9 @@ const STEPS: Array<{ title: string; time: string; body: ReactNode; action?: { hr
     time: "60 s",
     body: (
       <>
-        Open the housing-loan journey, agree to the consent text, and upload the files from <Code>eval/specimens/p1-expired/</Code> in the repository:{" "}
-        <Code>id.png</Code> as the photo ID, <Code>bill.png</Code> as proof of address and <Code>selfie.png</Code> as the selfie.
-        Each upload is quality-checked straight away; try <Code>p2-blurry/id.png</Code> to see a retake hint.
+        Open the housing-loan journey, agree to the consent text, and upload the files from the <Code>p1-expired</Code> specimen folder (see{" "}
+        <a href="#specimens" className={link}>Synthetic specimen files</a> above): <Code>id.png</Code> as the photo ID, <Code>bill.png</Code> as proof of
+        address and <Code>selfie.png</Code> as the selfie. Each upload is quality-checked straight away; try <Code>p2-blurry/id.png</Code> to see a retake hint.
       </>
     ),
     action: { href: "/apply/housing-loan", label: "Start the journey" },
@@ -52,26 +53,43 @@ const STEPS: Array<{ title: string; time: string; body: ReactNode; action?: { hr
     body: (
       <>
         The customer sees a calm outcome and what to fix (here, the expired ID), never a risk score. Repeat with <Code>p1-clean</Code> for approval or{" "}
-        <Code>p2-name-mismatch</Code> for manual review. The <Link href="/verify" className={link}>developer tool</Link> shows the full pipeline activity for the same files.
+        <Code>p2-name-mismatch</Code> for manual review. The <Link href="/verify" className={link}>developer tool</Link> shows the full pipeline activity for the same files,
+        and <Link href="/admin/audit" className={link}>Audit</Link> shows the events the run appended to the hash chain.
       </>
     ),
   },
 ];
 
-const REAL = [
-  "Policy compilation output is validated against a strict schema before it is saved",
+const META = [
+  "Policy compiler: labels each sentence with a rule kind or flags it; code checks every label against the sentence",
+  "Customer step wording, written once when a version is published",
+  "Document classification and field extraction, with a box showing where each value was read",
+  "Comparing values across documents, the reviewer summary and the customer message",
+];
+const CODE = [
+  "Every compiled rule is validated against a strict schema before it is saved",
   "Policy rules: expiry, minimum age, proof-of-address age, required documents",
   "Image quality gate: file type, size, resolution and a sharpness check",
-  "Cross-document comparison, risk scoring and the decision rule",
-  "Demo access code, rate limiting and the daily AI-call cap",
+  "Risk scoring and the decision rule: integrity issues go to a person, nothing is auto-rejected",
+  "Audit hash chain, demo access code, rate limiting and the daily AI-call cap",
 ];
 const MOCK = [
-  "Document reading: specimens return their ground truth; other files get placeholder data",
-  "Policy compiler: pattern matching over a closed vocabulary of nine rule kinds",
-  "Customer wording: fixed templates",
-  "Selfie: quality check only, no liveness detection or face matching",
-  "ID registry: a small synthetic list",
+  "Without a Meta key (mock mode): specimens return their ground truth, other files get placeholder data, and the compiler and wording use fixed patterns and templates",
+  "ID registry: a small synthetic list, not a government service",
+  "Selfie: quality check only, then discarded; no liveness detection or face matching",
 ];
+const CUT = [
+  "Storing cases: documents and extracted details are not kept; only the case id, policy version and decision are recorded",
+  "Encrypting case data with Vault (the per-customer key setup exists but holds no customer data)",
+  "A reviewer console with evidence boxes",
+  "Deleting a customer and the retention purge",
+];
+
+const List = ({ items, icon, tone }: { items: string[]; icon: "check" | "info" | "x"; tone: string }) => (
+  <ul className="flex flex-col gap-2 text-sm text-zinc-700 dark:text-zinc-300">
+    {items.map((t) => <li key={t} className="flex gap-2"><Icon name={icon} className={`mt-0.5 shrink-0 ${tone}`} />{t}</li>)}
+  </ul>
+);
 
 export default function GuidePage() {
   return (
@@ -79,10 +97,14 @@ export default function GuidePage() {
       <PageHeader eyebrow="Judge guide" title="See the whole flow in about three minutes"
         description="Write a policy in plain English, publish it, run a customer through it with a synthetic document, and see what the platform proposes." />
 
-      <div className="mb-10">
+      <div className="mb-6">
         <Suspense fallback={<Skeleton className="h-20" />}>
           <ProviderStatus />
         </Suspense>
+      </div>
+
+      <div className="mb-10">
+        <SpecimenFiles />
       </div>
 
       <ol className="flex flex-col gap-4">
@@ -109,22 +131,26 @@ export default function GuidePage() {
       </ol>
 
       <section aria-labelledby="real-vs-mock" className="mt-14">
-        <h2 id="real-vs-mock" className="text-2xl font-semibold tracking-tight">What is real and what is mock</h2>
+        <h2 id="real-vs-mock" className="text-2xl font-semibold tracking-tight">What this version does</h2>
         <p className="mt-2 text-zinc-600 dark:text-zinc-400">
-          In mock mode no model is called. Every AI result carries a badge saying which provider produced it.
+          The panel above says which AI provider this server runs. Every AI result carries a badge saying which provider produced it.
         </p>
         <div className="mt-6 grid gap-4 md:grid-cols-2">
           <Card>
-            <CardHeader title={<span className="flex items-center gap-2"><Badge tone="success">Real</Badge> Runs as it will in production</span>} />
-            <ul className="flex flex-col gap-2 text-sm text-zinc-700 dark:text-zinc-300">
-              {REAL.map((r) => <li key={r} className="flex gap-2"><Icon name="check" className="mt-0.5 shrink-0 text-emerald-600" />{r}</li>)}
-            </ul>
+            <CardHeader title={<span className="flex items-center gap-2"><Badge tone="accent">Meta</Badge> Calls Meta&apos;s model when connected</span>} />
+            <List items={META} icon="check" tone="text-accent-600 dark:text-accent-300" />
           </Card>
           <Card>
-            <CardHeader title={<span className="flex items-center gap-2"><Badge tone="mock">Mock</Badge> Stand-ins until a model is connected</span>} />
-            <ul className="flex flex-col gap-2 text-sm text-zinc-700 dark:text-zinc-300">
-              {MOCK.map((m) => <li key={m} className="flex gap-2"><Icon name="info" className="mt-0.5 shrink-0 text-fuchsia-600" />{m}</li>)}
-            </ul>
+            <CardHeader title={<span className="flex items-center gap-2"><Badge tone="success">Code</Badge> Always deterministic</span>} />
+            <List items={CODE} icon="check" tone="text-emerald-600 dark:text-emerald-400" />
+          </Card>
+          <Card>
+            <CardHeader title={<span className="flex items-center gap-2"><Badge tone="mock">Stand-in</Badge> Synthetic or simplified</span>} />
+            <List items={MOCK} icon="info" tone="text-fuchsia-600 dark:text-fuchsia-400" />
+          </Card>
+          <Card>
+            <CardHeader title={<span className="flex items-center gap-2"><Badge>Not in this version</Badge> Planned, not built yet</span>} />
+            <List items={CUT} icon="x" tone="text-zinc-500" />
           </Card>
         </div>
       </section>
