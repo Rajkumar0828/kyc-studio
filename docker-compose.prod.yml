@@ -1,0 +1,132 @@
+# Production stack: app, MongoDB, Vault (dev mode) + vault-init, and Caddy.
+#   docker compose -f docker-compose.prod.yml up -d --build
+# See docs/deploy.md. Never run `down -v` here: it deletes the MongoDB volume.
+#
+# Only Caddy publishes ports (80 and 443). MongoDB, Vault and vault-init sit on
+# the `internal` network, which has no host ports and no route out. The app is
+# on `internal` (to reach MongoDB and Vault) and `edge` (to be reached by Caddy
+# and to call the Meta API).
+#
+# Variables: compose reads `.env` (next to this file) for ${...} below; the app
+# also gets `.env.app`. Both are described in .env.prod.example.
+name: kyc-studio-prod
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: kyc-studio-app:latest
+    restart: unless-stopped
+    env_file:
+      - .env.app
+    # `environment` wins over env_file: the storage setup is fixed here.
+    environment:
+      NODE_ENV: production
+      POLICY_STORE: mongo
+      AI_CALL_LOG: mongo
+      AUDIT_LOG: mongo
+      APPLICATION_LOG: file # cases are not persisted in this version; data/ holds ids and decisions only
+      MONGODB_URI: mongodb://${MONGO_APP_USER:?set MONGO_APP_USER in .env}:${MONGO_APP_PASSWORD:?set MONGO_APP_PASSWORD in .env}@mongo:27017/kyc_studio?authSource=kyc_studio
+      VAULT_ADDR: http://vault:8200
+      VAULT_TOKEN: ${VAULT_APP_TOKEN:?set VAULT_APP_TOKEN in .env}
+    volumes:
+      - app_data:/app/frontend/data
+    depends_on:
+      mongo:
+        condition: service_healthy
+      vault:
+        condition: service_healthy
+    networks:
+      - internal
+      - edge
+    # Healthcheck: in the image (GET /api/health/live, liveness only).
+
+  mongo:
+    image: mongo:7
+    restart: unless-stopped
+    # Small server: cap the WiredTiger cache at about 0.5 GB.
+    command: ["--wiredTigerCacheSizeGB", "0.5"]
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USER:?set MONGO_ROOT_USER in .env}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:?set MONGO_ROOT_PASSWORD in .env}
+      MONGO_INITDB_DATABASE: kyc_studio
+      MONGO_APP_USER: ${MONGO_APP_USER:?set MONGO_APP_USER in .env}
+      MONGO_APP_PASSWORD: ${MONGO_APP_PASSWORD:?set MONGO_APP_PASSWORD in .env}
+    volumes:
+      - mongo_data:/data/db
+      - ./docker/mongo-init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    networks:
+      - internal
+
+  # Dev mode (in memory), as approved: a restart loses every key; vault-init
+  # restores the mount, policy and app token, and /api/health reports the restart.
+  vault:
+    image: hashicorp/vault:2.2.1
+    restart: unless-stopped
+    cap_add:
+      - IPC_LOCK
+    environment:
+      VAULT_DEV_ROOT_TOKEN_ID: ${VAULT_DEV_TOKEN:?set VAULT_DEV_TOKEN in .env}
+      VAULT_ADDR: http://127.0.0.1:8200
+    command: server -dev -dev-listen-address=0.0.0.0:8200
+    healthcheck:
+      test: ["CMD", "vault", "status"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - internal
+
+  # Same idempotent loop as in development (docker/vault/init.sh).
+  vault-init:
+    image: hashicorp/vault:2.2.1
+    restart: unless-stopped
+    depends_on:
+      vault:
+        condition: service_healthy
+    environment:
+      VAULT_ADDR: http://vault:8200
+      VAULT_TOKEN: ${VAULT_DEV_TOKEN:?set VAULT_DEV_TOKEN in .env}
+      VAULT_APP_TOKEN: ${VAULT_APP_TOKEN:?set VAULT_APP_TOKEN in .env}
+    volumes:
+      - ./docker/vault:/kyc:ro
+    entrypoint: ["/bin/sh", "/kyc/init.sh"]
+    networks:
+      - internal
+
+  caddy:
+    image: caddy:2.10.2
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      SITE_DOMAIN: ${SITE_DOMAIN:?set SITE_DOMAIN in .env (the public host name, e.g. kyc.example.com)}
+    volumes:
+      - ./docker/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      app:
+        condition: service_healthy
+    networks:
+      - edge
+
+networks:
+  internal:
+    internal: true
+  edge: {}
+
+volumes:
+  app_data:
+  mongo_data:
+  caddy_data:
+  caddy_config:

@@ -1,0 +1,29 @@
+# Caddy in front of the app: automatic HTTPS for SITE_DOMAIN (HTTP redirects
+# to HTTPS), a request body cap, security headers, and a trustworthy client IP.
+
+{$SITE_DOMAIN} {
+	encode zstd gzip
+
+	# Largest legitimate request: 5 documents + 1 selfie at 10 MiB each = 60 MiB
+	# (MAX_REQUEST_BYTES in frontend/src/lib/uploadLimits.ts), plus 4 MiB for
+	# multipart overhead and form fields. scripts/deploy-config-test.ts checks this.
+	request_body {
+		max_size 64MiB
+	}
+
+	header {
+		# One year; no includeSubDomains or preload (other hosts on the domain are not ours to commit).
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options "nosniff"
+		Content-Security-Policy "frame-ancestors 'none'"
+		-Server
+	}
+
+	reverse_proxy app:3000 {
+		# The app's rate limiter keys on the first X-Forwarded-For entry. Replace
+		# (never append to) whatever the client sent with the address Caddy saw,
+		# so a forged header cannot change the client's identity.
+		header_up X-Forwarded-For {remote_host}
+		header_up X-Real-IP {remote_host}
+	}
+}
