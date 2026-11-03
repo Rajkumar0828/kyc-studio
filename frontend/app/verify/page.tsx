@@ -87,7 +87,7 @@ export default function VerifyPage() {
       <div className="grid items-start gap-6 lg:grid-cols-[22rem_minmax(0,1fr)]">
         <section aria-label="Inputs" className="flex flex-col gap-6">
           <Card>
-            <CardHeader title="Demo scenarios" description="Generated test images; the mock provider reads their file names." />
+            <CardHeader title="Demo scenarios" description="Generated test images. The mock provider reads their file names; with Meta, the model reads the images." />
             <div className="grid grid-cols-2 gap-2">
               {SCENARIOS.map((s) => (
                 <Button key={s.name} variant="secondary" size="sm" disabled={busy} className="h-auto justify-start py-2 text-left whitespace-normal!"

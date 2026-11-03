@@ -25,7 +25,7 @@ export async function ProviderStatus() {
           {mode === "invalid" && <Badge tone="danger">misconfigured</Badge>}
         </p>
         <p className="mt-1 text-zinc-600 dark:text-zinc-400">
-          {mode === "mock" && "Mock mode: no model is called. Document reading, name comparison and customer wording come from deterministic stand-ins."}
+          {mode === "mock" && "Mock mode: no model is called. The policy compiler, document reading, name comparison and customer wording use deterministic stand-ins; the rules, checks and decisions are the real ones."}
           {mode === "meta" && `The policy compiler, customer step wording, document classification, extraction, comparison and summaries call ${MODEL}.`}
           {mode === "invalid" && "AI_PROVIDER must be mock or meta."}
         </p>
