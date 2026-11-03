@@ -20,7 +20,6 @@
     "test:caddy": "tsx scripts/caddy-proxy-test.ts"
   },
   "dependencies": {
-    "install": "^0.13.0",
     "mongodb": "^7.7.0",
     "next": "16.4.3",
     "openai": "^7.45.1",
