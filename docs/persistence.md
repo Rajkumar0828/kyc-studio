@@ -1,6 +1,6 @@
 # Persistence: MongoDB and Vault
 
-KYC Studio runs without any services by default: policies live in JSON files,
+KYCite runs without any services by default: policies live in JSON files,
 the audit log goes to the console and AI calls go to `data/ai-calls.jsonl`.
 Each store can be switched to MongoDB on its own. Customer cases (Phase 2) need
 both MongoDB and Vault, because their personal data is encrypted with a

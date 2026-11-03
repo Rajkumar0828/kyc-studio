@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { PageHeader } from "@/app/components/PageHeader";
 import { PolicyStudio } from "./PolicyStudio";
 
-export const metadata: Metadata = { title: "Policy Studio · KYC Studio" };
+export const metadata: Metadata = { title: "Policy Studio · KYCite" };
 
 // ?id=<policy> opens an existing policy's draft (or starts its next version).
 export default async function PolicyStudioPage(props: PageProps<"/admin/policies/new">) {

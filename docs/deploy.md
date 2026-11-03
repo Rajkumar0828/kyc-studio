@@ -1,6 +1,6 @@
-# Deploying KYC Studio
+# Deploying KYCite
 
-This guide puts KYC Studio on one fresh Ubuntu 24.04 server with Docker
+This guide puts KYCite on one fresh Ubuntu 24.04 server with Docker
 installed, behind HTTPS. Commands run on the server unless marked otherwise.
 
 ## What runs

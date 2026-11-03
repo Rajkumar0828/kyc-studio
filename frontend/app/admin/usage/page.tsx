@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { PageHeader } from "@/app/components/PageHeader";
 import { UsagePanel } from "./UsagePanel";
 
-export const metadata: Metadata = { title: "AI usage · KYC Studio" };
+export const metadata: Metadata = { title: "AI usage · KYCite" };
 
 export default function UsagePage() {
   return (

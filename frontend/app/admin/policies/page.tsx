@@ -3,7 +3,7 @@ import { ButtonLink } from "@/app/components/Button";
 import { PageHeader } from "@/app/components/PageHeader";
 import { PolicyList } from "./PolicyList";
 
-export const metadata: Metadata = { title: "Policies · KYC Studio" };
+export const metadata: Metadata = { title: "Policies · KYCite" };
 
 export default function PoliciesPage() {
   return (

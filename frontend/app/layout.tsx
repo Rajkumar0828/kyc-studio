@@ -15,8 +15,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "KYC Studio",
-  description: "Describe KYC rules in plain English; the platform builds and tests the verification flow.",
+  title: "KYCite",
+  description: "AI proposes, a human decides, and every check cites its source.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
@@ -34,7 +34,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         <div id="main" className="flex flex-1 flex-col">{children}</div>
         <footer className="border-t border-zinc-200 dark:border-zinc-800">
           <p className="mx-auto max-w-6xl px-4 py-6 text-sm text-zinc-500 sm:px-6">
-            KYC Studio · synthetic demo with fictional data. AI proposes, a human decides.
+            KYCite · synthetic demo with fictional data. AI proposes, a human decides, and every check cites its source.
           </p>
         </footer>
       </body>

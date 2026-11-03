@@ -25,7 +25,7 @@ export function NavBar() {
           <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-accent-600 text-white dark:bg-accent-500 dark:text-zinc-950">
             <Icon name="shield" />
           </span>
-          KYC Studio
+          KYCite
         </Link>
         <nav aria-label="Main" className="-mx-2 flex min-w-0 flex-1 overflow-x-auto">
           <ul className="flex items-center gap-1 px-2 text-sm">

@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { ApplyJourney } from "./ApplyJourney";
 
-export const metadata: Metadata = { title: "Verify your identity · KYC Studio" };
+export const metadata: Metadata = { title: "Verify your identity · KYCite" };
 
 export default async function ApplyPage(props: PageProps<"/apply/[policyId]">) {
   const { policyId } = await props.params;

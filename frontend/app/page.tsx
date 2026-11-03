@@ -42,7 +42,7 @@ export default function Home() {
   return (
     <main className="mx-auto w-full max-w-6xl px-4 sm:px-6">
       <section className="py-16 sm:py-24">
-        <Badge tone="accent">KYC Studio · synthetic demo</Badge>
+        <Badge tone="accent">KYCite · synthetic demo</Badge>
         <h1 className="mt-5 max-w-3xl text-4xl font-semibold tracking-tight text-zinc-950 sm:text-5xl dark:text-white">
           Changing KYC rules shouldn&apos;t mean rebuilding onboarding.
         </h1>

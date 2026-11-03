@@ -9,7 +9,7 @@ import { PageHeader } from "../components/PageHeader";
 import { ProviderStatus } from "../components/ProviderStatus";
 import { Skeleton } from "../components/Skeleton";
 
-export const metadata: Metadata = { title: "Judge guide · KYC Studio" };
+export const metadata: Metadata = { title: "Judge guide · KYCite" };
 
 const link = "font-medium text-accent-700 underline underline-offset-2 hover:no-underline dark:text-accent-300";
 const Code = ({ children }: { children: ReactNode }) => (

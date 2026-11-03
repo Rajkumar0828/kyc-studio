@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { PageHeader } from "@/app/components/PageHeader";
 import { AuditPanel } from "./AuditPanel";
 
-export const metadata: Metadata = { title: "Audit chain · KYC Studio" };
+export const metadata: Metadata = { title: "Audit chain · KYCite" };
 
 export default function AuditPage() {
   return (

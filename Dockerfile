@@ -1,4 +1,4 @@
-# KYC Studio app image. Build context: the repository root (see .dockerignore).
+# KYCite app image. Build context: the repository root (see .dockerignore).
 #   docker build -t kyc-studio-app .
 # Multi-stage: dependencies, build (Next.js standalone output), then a slim
 # runtime that runs as the unprivileged `node` user. No env files are copied:
