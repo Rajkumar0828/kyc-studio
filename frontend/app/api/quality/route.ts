@@ -1,5 +1,6 @@
 import { qualityProblems } from "@/src/lib/pipeline/quality";
-import { errorResponse, protect } from "@/src/lib/security/guard";
+import { protect } from "@/src/lib/security/guard";
+import { errorResponse } from "@/src/lib/security/errors";
 
 // POST multipart { file }: runs the pipeline's quality gate on one upload so the
 // journey can show the problem before the customer submits. No AI involved.

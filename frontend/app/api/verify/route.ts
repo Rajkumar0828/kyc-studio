@@ -5,7 +5,8 @@ import { getApplicationLog } from "@/src/lib/applications/log";
 import { consoleSink } from "@/src/lib/audit/logger";
 import { getPolicyStore } from "@/src/lib/policy/store";
 import { runPipeline } from "@/src/lib/pipeline/run";
-import { errorResponse, protect } from "@/src/lib/security/guard";
+import { protect } from "@/src/lib/security/guard";
+import { errorResponse } from "@/src/lib/security/errors";
 
 const toInput = async (f: File): Promise<InputFile> => ({
   filename: f.name,

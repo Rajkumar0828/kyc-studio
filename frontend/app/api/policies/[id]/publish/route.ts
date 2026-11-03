@@ -1,7 +1,8 @@
 import { generateGuide } from "@/src/lib/policy/guide";
 import { getPolicyStore, PolicyStoreError, specFromDraft } from "@/src/lib/policy/store";
 import { getAuditLog } from "@/src/lib/audit";
-import { actorOf, errorResponse, protect } from "@/src/lib/security/guard";
+import { actorOf, protect } from "@/src/lib/security/guard";
+import { errorResponse } from "@/src/lib/security/errors";
 
 // POST: publish the draft as version N+1 with step wording generated from that
 // exact version. Guarded by the demo access code and the rate limit. The guide

@@ -6,7 +6,8 @@ import { WarningKind, buildReadBack, CompileRecord, UnsupportedReasonSchema } fr
 import { checkCompileInput } from "@/src/lib/policy/compileCore";
 import { signCompile } from "@/src/lib/policy/compileToken";
 import { CompiledRules } from "@/src/lib/policy/schema";
-import { errorResponse, protect } from "@/src/lib/security/guard";
+import { protect } from "@/src/lib/security/guard";
+import { errorResponse } from "@/src/lib/security/errors";
 
 const Warnings = z.array(z.object({
   kind: WarningKind, sentence: z.string().max(1000).optional(), message: z.string().max(400), reason: UnsupportedReasonSchema.optional(),

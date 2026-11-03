@@ -1,7 +1,8 @@
 import { recentAiCalls } from "@/src/lib/ai/aiCallsMongo";
 import { summarizeUsage } from "@/src/lib/ai/usage";
 import { storageRequirement } from "@/src/lib/health";
-import { errorResponse, protect, requiresStorage } from "@/src/lib/security/guard";
+import { protect } from "@/src/lib/security/guard";
+import { errorResponse, requiresStorage } from "@/src/lib/security/errors";
 
 // GET: AI usage from the ai_calls collection (metadata only). Demo code required.
 export async function GET(req: Request) {

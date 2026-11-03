@@ -1,6 +1,7 @@
 import { getAuditLog } from "@/src/lib/audit";
 import { storageRequirement } from "@/src/lib/health";
-import { errorResponse, protect, requiresStorage } from "@/src/lib/security/guard";
+import { protect } from "@/src/lib/security/guard";
+import { errorResponse, requiresStorage } from "@/src/lib/security/errors";
 
 // GET: the most recent audit events (ids, types and codes only). Demo code required.
 export async function GET(req: Request) {

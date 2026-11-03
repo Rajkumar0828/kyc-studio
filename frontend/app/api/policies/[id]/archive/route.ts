@@ -1,6 +1,7 @@
 import { getPolicyStore } from "@/src/lib/policy/store";
 import { getAuditLog } from "@/src/lib/audit";
-import { actorOf, errorResponse, protect } from "@/src/lib/security/guard";
+import { actorOf, protect } from "@/src/lib/security/guard";
+import { errorResponse } from "@/src/lib/security/errors";
 
 // POST: archive a policy (one-way). Its versions stay readable; new applications are refused.
 export async function POST(req: Request, ctx: RouteContext<"/api/policies/[id]/archive">) {

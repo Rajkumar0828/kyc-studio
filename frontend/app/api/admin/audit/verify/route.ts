@@ -1,6 +1,7 @@
 import { getAuditLog } from "@/src/lib/audit";
 import { storageRequirement } from "@/src/lib/health";
-import { errorResponse, protect, requiresStorage } from "@/src/lib/security/guard";
+import { protect } from "@/src/lib/security/guard";
+import { errorResponse, requiresStorage } from "@/src/lib/security/errors";
 
 // POST: recompute the whole hash chain and report the first broken link, if any.
 export async function POST(req: Request) {

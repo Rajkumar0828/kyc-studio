@@ -7,7 +7,8 @@ import { getAuditLog, pipelineAuditSink } from "@/src/lib/audit";
 import { runPipeline } from "@/src/lib/pipeline/run";
 import { DocType } from "@/src/lib/policy/schema";
 import { getPolicyStore } from "@/src/lib/policy/store";
-import { errorResponse, protect } from "@/src/lib/security/guard";
+import { protect } from "@/src/lib/security/guard";
+import { errorResponse } from "@/src/lib/security/errors";
 
 const MAX_FILES = 5, MAX_BYTES = 10 * 1024 * 1024;
 

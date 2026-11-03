@@ -1,7 +1,8 @@
 import { verifyCompile } from "@/src/lib/policy/compileToken";
 import { DraftInput, getPolicyStore } from "@/src/lib/policy/store";
 import { getAuditLog } from "@/src/lib/audit";
-import { actorOf, errorResponse, protect, rateLimit } from "@/src/lib/security/guard";
+import { actorOf, protect, rateLimit } from "@/src/lib/security/guard";
+import { errorResponse } from "@/src/lib/security/errors";
 
 // GET: one summary per policy (seeds first). Read-only, so only rate limited.
 export async function GET(req: Request) {

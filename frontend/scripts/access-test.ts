@@ -1,5 +1,6 @@
 // Offline tests for the demo and admin access guards. Usage: npx tsx scripts/access-test.ts
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { actorOf, ADMIN_COOKIE, DEMO_COOKIE, requireAdminAccess, requireDemoAccess } from "../src/lib/security/guard";
 
 let failed = 0;
@@ -46,6 +47,14 @@ test("the audit actor is officer:admin only with a valid admin code", () => {
   assert.equal(actorOf(req({ [DEMO_COOKIE]: "demo-code-1234" })), "officer:demo");
   assert.equal(actorOf(req({ [DEMO_COOKIE]: "demo-code-1234", [ADMIN_COOKIE]: "wrong" })), "officer:demo");
   assert.equal(actorOf(req({ [DEMO_COOKIE]: "demo-code-1234", [ADMIN_COOKIE]: "admin-code-5678" })), "officer:admin");
+});
+
+// /api/demo-access imports guard.ts and runs on every page, so guard.ts must not
+// pull in the AI, store, Mongo or Vault layers (those belong in errors.ts).
+test("guard.ts imports only node:crypto and ./aiBudget", () => {
+  const src = readFileSync(new URL("../src/lib/security/guard.ts", import.meta.url), "utf8");
+  const from = [...src.matchAll(/^(?:import|export)[^;]*?from "([^"]+)"/gm)].map((m) => m[1]);
+  assert.deepEqual([...new Set(from)].sort(), ["./aiBudget", "node:crypto"]);
 });
 
 console.log(failed ? `\n${failed} failed` : "\nall passed");

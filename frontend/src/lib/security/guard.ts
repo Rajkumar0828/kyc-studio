@@ -1,13 +1,4 @@
 import { createHash, timingSafeEqual } from "node:crypto";
-import { ZodError } from "zod";
-import { ProviderUnavailable } from "../ai";
-import { MetaOutputTruncated } from "../ai/meta";
-import { CompilePreflightError, CompileValidationError } from "../ai/metaPolicyCompiler";
-import { CompileInputError } from "../policy/compileCore";
-import { AuditAppendFailed } from "../audit/chain";
-import { PolicyStoreError } from "../policy/store";
-import { MongoNotConfigured } from "../db/mongo";
-import { VaultError } from "../vault/transit";
 import { AiBudgetExceeded, aiBudgetLeft } from "./aiBudget";
 
 export { AiBudgetExceeded, consumeAiCall, metered } from "./aiBudget";
@@ -17,6 +8,8 @@ export { AiBudgetExceeded, consumeAiCall, metered } from "./aiBudget";
 //   rateLimit          fixed one-minute window per client IP (RATE_LIMIT_PER_MINUTE)
 //   AI budget          daily cap on AI calls (AI_DAILY_CALL_CAP), see aiBudget.ts
 // State is in memory: it resets on restart and is per server process.
+// Keep this module light (node:crypto and aiBudget only): /api/demo-access imports
+// it on every page. Error mapping lives in errors.ts.
 
 export const DEMO_COOKIE = "kyc_demo_access";
 
@@ -81,31 +74,6 @@ export function protect(req: Request, opts: { ai?: boolean } = {}): Response | n
   if (opts.ai && !aiBudgetLeft()) return json(429, new AiBudgetExceeded().message, "ai_daily_cap");
   return null;
 }
-
-// Maps errors thrown inside a guarded route to responses.
-export function errorResponse(e: unknown, fallback = "Request failed"): Response {
-  if (e instanceof AiBudgetExceeded) return json(429, e.message, "ai_daily_cap");
-  if (e instanceof AuditAppendFailed) return json(503, "The change was made, but its audit event could not be written. Check the audit page.", "audit_failed");
-  if (e instanceof ZodError) return json(422, "The data did not match the expected schema.", "invalid_data");
-  if (e instanceof PolicyStoreError) return json(e.status, e.message, "policy_store");
-  if (e instanceof ProviderUnavailable) return json(503, e.message, "provider_unavailable");
-  if (e instanceof CompileInputError) return json(400, e.message, "compile_input");
-  if (e instanceof CompileValidationError) return json(502, `${e.message}. Nothing was compiled; try again or rephrase the policy.`, "compile_invalid");
-  if (e instanceof CompilePreflightError) return json(502, e.message, "compile_preflight");
-  if (e instanceof MetaOutputTruncated)
-    return json(502, e.step === "compile"
-      ? `This policy is too long to compile in one go (the answer hit the ${e.maxCompletionTokens}-token limit). Split it into shorter parts and compile each part as its own policy.`
-      : `The model's answer was cut off at ${e.maxCompletionTokens} tokens (step ${e.step}). Try again.`, "output_truncated");
-  if (e instanceof MongoNotConfigured || (e instanceof Error && /^Mongo(ServerSelection|Network|NotConnected|Topology)/.test(e.name)))
-    return json(503, "The database is not available right now.", "storage_unavailable");
-  if (e instanceof VaultError) return json(503, "The encryption service (Vault) is not available right now.", "storage_unavailable");
-  // Log the error class and code only: messages can carry connection details or content.
-  console.error("[error]", e instanceof Error ? `${e.name}${(e as { code?: unknown }).code !== undefined ? ` code=${String((e as { code?: unknown }).code)}` : ""}` : "unknown");
-  return json(500, fallback, "error");
-}
-
-// For routes and pages that need MongoDB (and Vault): 409 with the setting to change.
-export const requiresStorage = (message: string) => json(409, message, "requires_storage");
 
 // ---- admin access: a SECOND secret for destructive actions ----
 // Delete customer, retention purge, seed reset and any bulk wipe need the demo
