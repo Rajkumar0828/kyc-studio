@@ -62,7 +62,7 @@ async function specimens(): Promise<Map<string, SpecimenMatch>> {
   if (!stat) return new Map();
   if (!g._specimens || g._specimens.mtimeMs !== stat.mtimeMs) g._specimens = { mtimeMs: stat.mtimeMs, byHash: build() };
   return g._specimens.byHash.catch((e) => {
-    console.error("[specimens] could not load eval/specimens/index.json:", e);
+    console.error("[specimens] could not load eval/specimens/index.json:", e instanceof Error ? e.name : "error");
     return new Map<string, SpecimenMatch>();
   });
 }

@@ -8,7 +8,11 @@ import { errorResponse } from "@/src/lib/security/errors";
 export async function GET(req: Request) {
   const limited = rateLimit(req);
   if (limited) return limited;
-  return Response.json({ policies: await getPolicyStore().list() });
+  try {
+    return Response.json({ policies: await getPolicyStore().list() });
+  } catch (e) {
+    return errorResponse(e, "Could not list the policies");
+  }
 }
 
 // POST DraftInput + compileToken: create or replace the draft for a policy.
