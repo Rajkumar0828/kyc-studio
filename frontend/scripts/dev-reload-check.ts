@@ -35,7 +35,7 @@ if (!browser) {
   process.exit(0);
 }
 
-type Cdp = { method?: string; params?: Record<string, any> };
+type Cdp = { method?: string; params?: { frame?: { parentId?: string }; response?: { payloadData?: string } } };
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 async function watch(url: string) {
@@ -59,9 +59,9 @@ async function watch(url: string) {
     const reloads: string[] = [];
     ws.onmessage = (m) => {
       const msg = JSON.parse(String(m.data)) as Cdp;
-      if (msg.method === "Page.frameNavigated" && !msg.params!.frame.parentId) navigations++;
+      if (msg.method === "Page.frameNavigated" && !msg.params?.frame?.parentId) navigations++;
       if (msg.method === "Network.webSocketFrameReceived") {
-        const data = String(msg.params!.response.payloadData);
+        const data = String(msg.params?.response?.payloadData ?? "");
         if (data.includes('"turbopack-connected"')) connected = true;
         if (/"type":"restart"|"type":"reloadPage"/.test(data)) reloads.push(data.slice(0, 160));
       }

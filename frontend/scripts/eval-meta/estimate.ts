@@ -16,7 +16,6 @@ import { cacheKey } from "./cache";
 // max_completion_tokens, which is used as the worst case.
 
 export { DEFAULT_PRICES, PRICES_SOURCE, usdOf, type Prices } from "../../src/lib/ai/prices";
-import { usdOf } from "../../src/lib/ai/prices";
 export const COUNT_DISCLOSURE =
   "Meta's token-counting docs (https://dev.meta.ai/docs/token-counting, checked 2026-10-30) do not say whether count requests are billed or rate-limited; " +
   "they only say counting does not generate output or record generation usage. This report does not assume they are free.";
