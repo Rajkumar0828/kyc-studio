@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { DemoBanner } from "./components/DemoBanner";
+import { Logo } from "./components/Logo";
 import { NavBar } from "./components/NavBar";
 import "./globals.css";
 
@@ -14,9 +15,13 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+const TAGLINE = "AI proposes, a human decides, and every check cites its source.";
+
+// Pages set their own "<Page> · KYCite" titles; the home page uses the default.
 export const metadata: Metadata = {
-  title: "KYCite",
-  description: "AI proposes, a human decides, and every check cites its source.",
+  title: `KYCite · ${TAGLINE}`,
+  description: TAGLINE,
+  applicationName: "KYCite",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
@@ -32,10 +37,13 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         <DemoBanner />
         <NavBar />
         <div id="main" className="flex flex-1 flex-col">{children}</div>
-        <footer className="border-t border-zinc-200 dark:border-zinc-800">
-          <p className="mx-auto max-w-6xl px-4 py-6 text-sm text-zinc-500 sm:px-6">
-            KYCite · synthetic demo with fictional data. AI proposes, a human decides, and every check cites its source.
-          </p>
+        <footer className="border-t border-zinc-200 bg-white/60 dark:border-zinc-800 dark:bg-navy-950/60">
+          <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-3 gap-y-1 px-4 py-6 text-sm text-zinc-600 sm:px-6 dark:text-zinc-400">
+            <Logo width={20} height={20} />
+            <span className="font-semibold text-zinc-900 dark:text-zinc-100">KYCite</span>
+            <span>{TAGLINE}</span>
+            <span className="text-zinc-500">Synthetic demo with fictional data.</span>
+          </div>
         </footer>
       </body>
     </html>
