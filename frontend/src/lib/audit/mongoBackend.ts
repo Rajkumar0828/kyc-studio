@@ -29,7 +29,9 @@ export const mongoAuditBackend: AuditBackend = {
   },
   async insert(e) {
     try {
-      await (await collection()).insertOne({ ...e });
+      // append() never passes undefined keys; ignoreUndefined is a second guard
+      // (by default the driver stores undefined as null).
+      await (await collection()).insertOne({ ...e }, { ignoreUndefined: true });
     } catch (err) {
       if ((err as MongoServerError).code === 11000) throw new DuplicateSeq();
       throw err;

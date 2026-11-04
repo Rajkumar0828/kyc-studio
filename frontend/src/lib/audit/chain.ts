@@ -45,18 +45,51 @@ export const AuditInput = z.object({
 }).strict();
 export type AuditInput = z.infer<typeof AuditInput>;
 
-export interface AuditEvent extends AuditInput {
-  seq: number;
-  at: string;
-  prevHash: string;
-  hash: string;
+// The stored event, exactly as written and as checked. append() validates the
+// object it is about to insert with StoredEvent, and verify() checks stored
+// events with the same schema, so an event the verifier would reject can never
+// be stored. Keys are never undefined: MongoDB would store them as null.
+export const SCHEMA_VERSION = 2 as const;
+const HEX64 = z.string().regex(/^[0-9a-f]{64}$/);
+const Chained = { seq: z.number().int().positive(), at: z.iso.datetime(), prevHash: HEX64, hash: HEX64 };
+export const StoredEvent = AuditInput.extend({ schemaVersion: z.literal(SCHEMA_VERSION), ...Chained }).strict();
+export type AuditEvent = AuditInput & { schemaVersion?: typeof SCHEMA_VERSION; seq: number; at: string; prevHash: string; hash: string };
+
+// Version 1: events written before schemaVersion existed (no schemaVersion key).
+// They are the same shape with one exception our own code produced: the
+// pipeline's case_received event passed data: undefined, which MongoDB stored as
+// data: null. That exact shape is accepted for case_received only; null carries
+// no personal data and is treated as absent when re-hashing. Everything else in a
+// v1 event must match the current rules, and unknown keys are still rejected.
+const LegacyV1 = AuditInput.extend({ ...Chained }).strict();
+const LegacyV1CaseReceived = AuditInput.extend({ type: z.literal("case_received"), data: z.null(), ...Chained }).strict();
+
+// Returns the event as it was hashed, or null if the stored shape is not allowed.
+export function parseStoredEvent(raw: unknown): AuditEvent | null {
+  const v2 = StoredEvent.safeParse(raw);
+  if (v2.success) return v2.data;
+  const v1 = LegacyV1.safeParse(raw);
+  if (v1.success) return v1.data;
+  const legacy = LegacyV1CaseReceived.safeParse(raw);
+  if (legacy.success) {
+    const { data: _null, ...rest } = legacy.data;
+    void _null;
+    return rest;
+  }
+  return null;
 }
+
+// Drops undefined keys (one level; data is rebuilt the same way) so the stored
+// object is exactly what was validated and hashed.
+const defined = <T extends object>(o: T): T => Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined)) as T;
 
 export const GENESIS = "0".repeat(64);
 
+// schemaVersion is part of the hash for v2 events; v1 events have none, and
+// canonicalJson drops undefined keys, so their hashes are unchanged.
 export function hashEvent(e: Omit<AuditEvent, "hash">): string {
-  const { seq, at, type, actor, caseId, policyId, policyVersion, data, prevHash } = e;
-  return createHash("sha256").update(prevHash + canonicalJson({ seq, at, type, actor, caseId, policyId, policyVersion, data, prevHash })).digest("hex");
+  const { schemaVersion, seq, at, type, actor, caseId, policyId, policyVersion, data, prevHash } = e;
+  return createHash("sha256").update(prevHash + canonicalJson({ schemaVersion, seq, at, type, actor, caseId, policyId, policyVersion, data, prevHash })).digest("hex");
 }
 
 // Raised by a backend when the seq it was asked to insert is already taken.
@@ -107,8 +140,9 @@ export function createChainLog(kind: "memory" | "mongo", backend: AuditBackend, 
     const deadline = Date.now() + retryForMs;
     for (;;) {
       const last = await backend.last();
-      const base = { ...input, seq: (last?.seq ?? 0) + 1, at: new Date().toISOString(), prevHash: last?.hash ?? GENESIS };
-      const event: AuditEvent = { ...base, hash: hashEvent(base) };
+      const base = defined({ ...input, ...(input.data && { data: defined(input.data) }), schemaVersion: SCHEMA_VERSION, seq: (last?.seq ?? 0) + 1, at: new Date().toISOString(), prevHash: last?.hash ?? GENESIS });
+      // Validate the exact object that will be stored with the verifier's schema.
+      const event = StoredEvent.parse({ ...base, hash: hashEvent(base) });
       try {
         await backend.insert(event);
         counters.appends++;
@@ -142,10 +176,12 @@ export function createChainLog(kind: "memory" | "mongo", backend: AuditBackend, 
           const broken = (reason: NonNullable<VerifyResult["firstBroken"]>["reason"], expected: string, actual: string): VerifyResult =>
             ({ ok: false, count, lastSeq: expectedSeq - 1, lastHash: prevHash, firstBroken: { seq: e.seq, reason, expected, actual } });
           if (e.seq !== expectedSeq) return broken("seq_gap", String(expectedSeq), String(e.seq));
-          const { seq, at, prevHash: p, hash, ...input } = e;
-          if (!AuditInput.safeParse(input).success) return broken("invalid_event", "valid event", "invalid fields");
+          const parsed = parseStoredEvent(e);
+          if (!parsed) return broken("invalid_event", "valid event", "invalid fields");
+          const { hash, ...hashed } = parsed;
+          const p = hashed.prevHash;
           if (p !== prevHash) return broken("prev_hash_mismatch", prevHash, p);
-          const recomputed = hashEvent({ ...input, seq, at, prevHash: p });
+          const recomputed = hashEvent(hashed);
           if (recomputed !== hash) return broken("hash_mismatch", recomputed, hash);
           prevHash = hash;
           expectedSeq++;
@@ -160,6 +196,13 @@ export function createChainLog(kind: "memory" | "mongo", backend: AuditBackend, 
   };
 }
 
+// Stores a value the way MongoDB does by default: undefined becomes null. The
+// memory backend uses it so tests see what production would store.
+export const bsonLike = <T>(v: T): T =>
+  Array.isArray(v) ? (v.map((x) => (x === undefined ? null : bsonLike(x))) as T)
+  : v && typeof v === "object" ? (Object.fromEntries(Object.entries(v).map(([k, x]) => [k, x === undefined ? null : bsonLike(x)])) as T)
+  : v;
+
 // In-memory backend. last() yields to the event loop, like a database round trip,
 // so concurrent appends really race (tests rely on this).
 export function createMemoryBackend() {
@@ -173,7 +216,7 @@ export function createMemoryBackend() {
     async insert(e) {
       await tick();
       if (events.some((x) => x.seq === e.seq)) throw new DuplicateSeq();
-      events.push(structuredClone(e));
+      events.push(bsonLike(structuredClone(e)));
     },
     ascending: async (after, limit) => events.filter((e) => e.seq > after).sort((a, b) => a.seq - b.seq).slice(0, limit).map((e) => structuredClone(e)),
     recent: async (limit) => [...events].sort((a, b) => b.seq - a.seq).slice(0, limit).map((e) => structuredClone(e)),

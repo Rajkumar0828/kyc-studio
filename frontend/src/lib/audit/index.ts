@@ -46,6 +46,7 @@ export function pipelineAuditSink(log: AuditLog, ctx: { caseId: string; policyId
     if (typeof d.fails === "number") data.count = d.fails;
     if (typeof d.docType === "string") data.docType = d.docType as NonNullable<AuditInput["data"]>["docType"];
     const actor = e.actor.startsWith("ai:") ? `ai:${e.actor.slice(3).replace(/[^a-z0-9_-]/g, "")}` : "system";
-    await log.append({ type, actor, caseId: ctx.caseId, policyId: ctx.policyId, policyVersion: ctx.policyVersion, data: Object.keys(data).length ? data : undefined });
+    // No data key at all when nothing coded applies (e.g. case_received).
+    await log.append({ type, actor, caseId: ctx.caseId, policyId: ctx.policyId, policyVersion: ctx.policyVersion, ...(Object.keys(data).length && { data }) });
   };
 }
