@@ -236,8 +236,8 @@ flowchart LR
 
 ## Try it
 
-- **Live demo:** <LIVE_URL>
-- **Judge access code:** <JUDGE_CODE>. Enter it in the banner at the top of any
+- **Live demo:** https://kycite-raj.duckdns.org/
+- **Judge access code:** KYCITE-B7158E . Enter it in the banner at the top of any
   page. It unlocks the AI and policy features.
 
 Suggested path:
