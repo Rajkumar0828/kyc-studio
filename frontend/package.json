@@ -15,7 +15,7 @@
     "eval:meta": "tsx --env-file=.env.local scripts/eval-meta/run.ts",
     "test:policy": "tsx scripts/policy-compiler-test.ts && tsx scripts/policy-store-test.ts && tsx scripts/ai-call-log-test.ts && tsx scripts/meta-compiler-test.ts && tsx scripts/guide-fallback-test.ts",
     "test:eval": "tsx scripts/eval-score-test.ts && tsx scripts/eval-cache-test.ts && tsx scripts/expiry-rule-test.ts && tsx scripts/eval-overlay-test.ts",
-    "test:storage": "tsx scripts/storage-test.ts && tsx scripts/audit-chain-test.ts && tsx scripts/access-test.ts && tsx scripts/vault-init-test.ts && tsx scripts/error-logging-test.ts && tsx scripts/ai-budget-restore-test.ts && tsx scripts/deploy-config-test.ts",
+    "test:storage": "tsx scripts/storage-test.ts && tsx scripts/audit-chain-test.ts && tsx scripts/audit-regression-test.ts && tsx scripts/access-test.ts && tsx scripts/vault-init-test.ts && tsx scripts/error-logging-test.ts && tsx scripts/ai-budget-restore-test.ts && tsx scripts/deploy-config-test.ts",
     "check:dev-reload": "tsx scripts/dev-reload-check.ts",
     "test:caddy": "tsx scripts/caddy-proxy-test.ts"
   },
