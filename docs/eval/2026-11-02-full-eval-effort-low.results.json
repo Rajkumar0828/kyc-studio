@@ -1,0 +1,1779 @@
+{
+  "run": {
+    "startedAt": "2026-11-02T04:31:53.701Z",
+    "finishedAt": "2026-11-02T04:33:26.896Z",
+    "model": "muse-spark-1.3",
+    "reasoningEffort": {
+      "doc_class": "low",
+      "extraction": "low",
+      "compare": "low",
+      "summary": "low",
+      "guidance": "low"
+    },
+    "maxCompletionTokens": {
+      "doc_class": 2000,
+      "extraction": 4000,
+      "compare": 2000,
+      "summary": 2000,
+      "guidance": 2000
+    },
+    "prices": {
+      "input": 1.25,
+      "cachedInput": 0.15,
+      "output": 4.25
+    },
+    "maxCalls": 80,
+    "cache": "on (eval\\.cache\\meta)",
+    "counting": {
+      "live": 2,
+      "cached": 12,
+      "enabled": true
+    },
+    "guard": [
+      "AI_PROVIDER resolved to meta (refuses to run otherwise).",
+      "Verified that the mock specimen shortcut does not recognise a real specimen.",
+      "The mock provider is not used."
+    ],
+    "preflight": "reasoning_effort=low with a strict json_schema (incl. minItems/maxItems) returned valid output (cached result)."
+  },
+  "totals": {
+    "live": 10,
+    "cached": 21,
+    "input": 27240,
+    "output": 7792,
+    "reasoning": 5241,
+    "cachedIn": 51,
+    "usd": 0.0671099
+  },
+  "cases": [
+    {
+      "caseId": "p1-clean",
+      "policyId": "housing-loan",
+      "asOf": "2026-11-01",
+      "expectedDecision": "auto_approve",
+      "decision": "auto_approve",
+      "expectedCodes": [],
+      "codes": [],
+      "decisionPass": true,
+      "codesPass": true,
+      "plannedCalls": 5,
+      "liveCalls": 2,
+      "cachedCalls": 3,
+      "docs": [
+        {
+          "doc": "p1-clean/id.png",
+          "truthType": "national_id",
+          "predictedType": "national_id",
+          "classPass": true,
+          "extractionCached": false,
+          "fields": [
+            {
+              "field": "full_name",
+              "truthFound": true,
+              "modelFound": true,
+              "truth": "Elin Thornquist",
+              "model": "ELIN THORNQUIST",
+              "modelBox": [
+                322,
+                273,
+                545,
+                307
+              ],
+              "truthBox": [
+                332,
+                260,
+                555,
+                314
+              ],
+              "diagnostics": null,
+              "valuePass": true,
+              "isoFormat": null,
+              "iou": 0.5848812792763689,
+              "centreInside": true,
+              "boxPass": true,
+              "pass": true
+            },
+            {
+              "field": "date_of_birth",
+              "truthFound": true,
+              "modelFound": true,
+              "truth": "1988-06-14",
+              "model": "1988-06-14",
+              "modelBox": [
+                322,
+                389,
+                465,
+                422
+              ],
+              "truthBox": [
+                332,
+                378,
+                474,
+                433
+              ],
+              "diagnostics": null,
+              "valuePass": true,
+              "isoFormat": true,
+              "iou": 0.5391891891891892,
+              "centreInside": true,
+              "boxPass": true,
+              "pass": true
+            },
+            {
+              "field": "document_number",
+              "truthFound": true,
+              "modelFound": true,
+              "truth": "VD4K7Q2M9T",
+              "model": "VD4K7Q2M9T",
+              "modelBox": [
+                664,
+                385,
+                809,
+                419
+              ],
+              "truthBox": [
+                660,
+                378,
+                808,
+                426
+              ],
+              "diagnostics": null,
+              "valuePass": true,
+              "isoFormat": null,
+              "iou": 0.6859064163631269,
+              "centreInside": true,
+              "boxPass": true,
+              "pass": true
+            },
+            {
+              "field": "issue_date",
+              "truthFound": true,
+              "modelFound": true,
+              "truth": "2021-05-10",
+              "model": "2021-05-10",
+              "modelBox": [
+                322,
+                508,
+                476,
+                544
+              ],
+              "truthBox": [
+                332,
+                497,
+                479,
+                551
+              ],
+              "diagnostics": null,
+              "valuePass": true,
+              "isoFormat": true,
+              "iou": 0.6247288503253796,
+              "centreInside": true,
+              "boxPass": true,
+              "pass": true
+            },
+            {
+              "field": "expiry_date",
+              "truthFound": true,
+              "modelFound": true,
+              "truth": "2031-05-09",
+              "model": "2031-05-09",
+              "modelBox": [
+                663,
+                511,
+                810,
+                545
+              ],
+              "truthBox": [
+                660,
+                497,
+                811,
+                551
+              ],
+              "diagnostics": null,
+              "valuePass": true,
+              "isoFormat": true,
+              "iou": 0.6129506990434143,
+              "centreInside": true,
+              "boxPass": true,
+              "pass": true
+            },
+            {
+              "field": "address",
+              "truthFound": true,
+              "modelFound": true,
+              "truth": "14 Quillfeather Row, Ambermoor 20417",
+              "model": "14 Quillfeather Row, Ambermoor 20417",
+              "modelBox": [
+                322,
+                626,
+                791,
+                666
+              ],
+              "truthBox": [
+                332,
+                615,
+                789,
+                670
+              ],
+              "diagnostics": null,
+              "valuePass": true,
+              "isoFormat": null,
+              "iou": 0.7136443490142494,
+              "centreInside": true,
+              "boxPass": true,
+              "pass": true
+            }
+          ],
+          "overlay": "overlays/p1-clean_id.html"
+        },
+        {
+          "doc": "p1-clean/bill.png",
+          "truthType": "utility_bill",
+          "predictedType": "utility_bill",
+          "classPass": true,
+          "extractionCached": false,
+          "fields": [
+            {
+              "field": "full_name",
+              "truthFound": true,
+              "modelFound": true,
+              "truth": "Elin Thornquist",
+              "model": "Elin Thornquist",
+              "modelBox": [
+                63,
+                167,
+                227,
+                185
+              ],
+              "truthBox": [
+                64,
+                161,
+                230,
+                185
+              ],
+              "diagnostics": null,
+              "valuePass": true,
+              "isoFormat": null,
+              "iou": 0.7331334332833583,
+              "centreInside": true,
+              "boxPass": true,
+              "pass": true
+            },
+            {
+              "field": "date_of_birth",
+              "truthFound": false,
+              "modelFound": false,
+              "truth": "",
+              "model": "",
+              "modelBox": null,
+              "truthBox": null,
+              "diagnostics": null,
+              "valuePass": true,
+              "isoFormat": null,
+              "iou": null,
+              "centreInside": null,
+              "boxPass": null,
+              "pass": true
+            },
+            {
+              "field": "document_number",
+              "truthFound": true,
+              "modelFound": true,
+              "truth": "QW-80988-26579",
+              "model": "QW-80988-26579",
+              "modelBox": [
+                728,
+                165,
+                888,
+                180
+              ],
+              "truthBox": [
+                753,
+                159,
+                910,
+                178
+              ],
+              "diagnostics": null,
+              "valuePass": true,
+              "isoFormat": null,
+              "iou": 0.48373759647188536,
+              "centreInside": true,
+              "boxPass": true,
+              "pass": true
+            },
+            {
+              "field": "issue_date",
+              "truthFound": true,
+              "modelFound": true,
+              "truth": "2026-09-24",
+              "model": "2026-09-24",
+              "modelBox": [
+                720,
+                193,
+                888,
+                208
+              ],
+              "truthBox": [
+                738,
+                187,
+                910,
+                206
+              ],
+              "diagnostics": null,
+              "valuePass": true,
+              "isoFormat": true,
+              "iou": 0.5080771235018239,
+              "centreInside": true,
+              "boxPass": true,
+              "pass": true
+            },
+            {
+              "field": "expiry_date",
+              "truthFound": false,
+              "modelFound": false,
+              "truth": "",
+              "model": "",
+              "modelBox": null,
+              "truthBox": null,
+              "diagnostics": null,
+              "valuePass": true,
+              "isoFormat": null,
+              "iou": null,
+              "centreInside": null,
+              "boxPass": null,
+              "pass": true
+            },
+            {
+              "field": "address",
+              "truthFound": true,
+              "modelFound": true,
+              "truth": "14 Quillfeather Row, Ambermoor 20417",
+              "model": "14 Quillfeather Row, Ambermoor 20417",
+              "modelBox": [
+                63,
+                193,
+                431,
+                238
+              ],
+              "truthBox": [
+                64,
+                187,
+                416,
+                237
+              ],
+              "diagnostics": null,
+              "valuePass": true,
+              "isoFormat": null,
+              "iou": 0.829477292202228,
+              "centreInside": true,
+              "boxPass": true,
+              "pass": true
+            }
+          ],
+          "overlay": "overlays/p1-clean_bill.html"
+        }
+      ],
+      "failure": null
+    },
+    {
+      "caseId": "p2-clean",
+      "policyId": "housing-loan",
+      "asOf": "2026-11-01",
+      "expectedDecision": "auto_approve",
+      "decision": "auto_approve",
+      "expectedCodes": [],
+      "codes": [],
+      "decisionPass": true,
+      "codesPass": true,
+      "plannedCalls": 5,
+      "liveCalls": 2,
+      "cachedCalls": 3,
+      "docs": [
+        {
+          "doc": "p2-clean/id.png",
+          "truthType": "national_id",
+          "predictedType": "national_id",
+          "classPass": true,
+          "extractionCached": false,
+          "fields": [
+            {
+              "field": "full_name",
+              "truthFound": true,
+              "modelFound": true,
+              "truth": "Tobias Wrenfield",
+              "model": "TOBIAS WRENFIELD",
+              "modelBox": [
+                338,
+                273,
+                567,
+                303
+              ],
+              "truthBox": [
+                332,
+                260,
+                566,
+                314
+              ],
+              "diagnostics": null,
+              "valuePass": true,
+              "isoFormat": null,
+              "iou": 0.5400284225485552,
+              "centreInside": true,
+              "boxPass": true,
+              "pass": true
+            },
+            {
+              "field": "date_of_birth",
+              "truthFound": true,
+              "modelFound": true,
+              "truth": "1979-11-02",
+              "model": "1979-11-02",
+              "modelBox": [
+                339,
+                389,
+                491,
+                423
+              ],
+              "truthBox": [
+                332,
+                378,
+                485,
+                433
+              ],
+              "diagnostics": null,
+              "valuePass": true,
+              "isoFormat": true,
+              "iou": 0.5759368836291914,
+              "centreInside": true,
+              "boxPass": true,
+              "pass": true
+            },
+            {
+              "field": "document_number",
+              "truthFound": true,
+              "modelFound": true,
+              "truth": "VD8R3N6W1H",
+              "model": "VD8R3N6W1H",
+              "modelBox": [
+                659,
+                385,
+                813,
+                419
+              ],
+              "truthBox": [
+                660,
+                378,
+                808,
+                426
+              ],
+              "diagnostics": null,
+              "valuePass": true,
+              "isoFormat": null,
+              "iou": 0.6885604816639299,
+              "centreInside": true,
+              "boxPass": true,
+              "pass": true
+            },
+            {
+              "field": "issue_date",
+              "truthFound": true,
+              "modelFound": true,
+              "truth": "2022-09-01",
+              "model": "2022-09-01",
+              "modelBox": [
+                339,
+                508,
+                475,
+                543
+              ],
+              "truthBox": [
+                332,
+                497,
+                472,
+                551
+              ],
+              "diagnostics": null,
+              "valuePass": true,
+              "isoFormat": true,
+              "iou": 0.6073059360730594,
+              "centreInside": true,
+              "boxPass": true,
+              "pass": true
+            },
+            {
+              "field": "expiry_date",
+              "truthFound": true,
+              "modelFound": true,
+              "truth": "2032-08-31",
+              "model": "2032-08-31",
+              "modelBox": [
+                659,
+                510,
+                818,
+                544
+              ],
+              "truthBox": [
+                660,
+                497,
+                810,
+                551
+              ],
+              "diagnostics": null,
+              "valuePass": true,
+              "isoFormat": true,
+              "iou": 0.6067094932191291,
+              "centreInside": true,
+              "boxPass": true,
+              "pass": true
+            },
+            {
+              "field": "address",
+              "truthFound": true,
+              "modelFound": true,
+              "truth": "7 Brindlewick Lane, Hollowmere 31862",
+              "model": "7 Brindlewick Lane, Hollowmere 31862",
+              "modelBox": [
+                338,
+                628,
+                763,
+                663
+              ],
+              "truthBox": [
+                332,
+                615,
+                780,
+                670
+              ],
+              "diagnostics": null,
+              "valuePass": true,
+              "isoFormat": null,
+              "iou": 0.6036931818181818,
+              "centreInside": true,
+              "boxPass": true,
+              "pass": true
+            }
+          ],
+          "overlay": "overlays/p2-clean_id.html"
+        },
+        {
+          "doc": "p2-clean/bill.png",
+          "truthType": "utility_bill",
+          "predictedType": "utility_bill",
+          "classPass": true,
+          "extractionCached": false,
+          "fields": [
+            {
+              "field": "full_name",
+              "truthFound": true,
+              "modelFound": true,
+              "truth": "Tobias Wrenfield",
+              "model": "Tobias Wrenfield",
+              "modelBox": [
+                64,
+                167,
+                274,
+                185
+              ],
+              "truthBox": [
+                64,
+                161,
+                249,
+                185
+              ],
+              "diagnostics": null,
+              "valuePass": true,
+              "isoFormat": null,
+              "iou": 0.6809815950920245,
+              "centreInside": true,
+              "boxPass": true,
+              "pass": true
+            },
+            {
+              "field": "date_of_birth",
+              "truthFound": false,
+              "modelFound": false,
+              "truth": "",
+              "model": "",
+              "modelBox": null,
+              "truthBox": null,
+              "diagnostics": null,
+              "valuePass": true,
+              "isoFormat": null,
+              "iou": null,
+              "centreInside": null,
+              "boxPass": null,
+              "pass": true
+            },
+            {
+              "field": "document_number",
+              "truthFound": true,
+              "modelFound": true,
+              "truth": "QW-88218-60939",
+              "model": "QW-88218-60939",
+              "modelBox": [
+                731,
+                170,
+                892,
+                188
+              ],
+              "truthBox": [
+                756,
+                159,
+                910,
+                178
+              ],
+              "diagnostics": {
+                "dxPct": -2.15,
+                "dyPct": 1.05,
+                "widthRatio": 1.0454545454545454,
+                "heightRatio": 0.9473684210526315
+              },
+              "valuePass": true,
+              "isoFormat": null,
+              "iou": 0.22972972972972974,
+              "centreInside": false,
+              "boxPass": false,
+              "pass": false
+            },
+            {
+              "field": "issue_date",
+              "truthFound": true,
+              "modelFound": true,
+              "truth": "2026-09-27",
+              "model": "2026-09-27",
+              "modelBox": [
+                739,
+                199,
+                892,
+                218
+              ],
+              "truthBox": [
+                738,
+                187,
+                910,
+                206
+              ],
+              "diagnostics": {
+                "dxPct": -0.85,
+                "dyPct": 1.2,
+                "widthRatio": 0.8895348837209303,
+                "heightRatio": 1
+              },
+              "valuePass": true,
+              "isoFormat": true,
+              "iou": 0.20983542319749215,
+              "centreInside": false,
+              "boxPass": false,
+              "pass": false
+            },
+            {
+              "field": "expiry_date",
+              "truthFound": false,
+              "modelFound": false,
+              "truth": "",
+              "model": "",
+              "modelBox": null,
+              "truthBox": null,
+              "diagnostics": null,
+              "valuePass": true,
+              "isoFormat": null,
+              "iou": null,
+              "centreInside": null,
+              "boxPass": null,
+              "pass": true
+            },
+            {
+              "field": "address",
+              "truthFound": true,
+              "modelFound": true,
+              "truth": "7 Brindlewick Lane, Hollowmere 31862",
+              "model": "7 Brindlewick Lane, Hollowmere 31862",
+              "modelBox": [
+                65,
+                199,
+                477,
+                220
+              ],
+              "truthBox": [
+                64,
+                187,
+                475,
+                211
+              ],
+              "diagnostics": {
+                "dxPct": 0.15,
+                "dyPct": 1.05,
+                "widthRatio": 1.002433090024331,
+                "heightRatio": 0.875
+              },
+              "valuePass": true,
+              "isoFormat": null,
+              "iou": 0.36187113857016767,
+              "centreInside": true,
+              "boxPass": false,
+              "pass": false
+            }
+          ],
+          "overlay": "overlays/p2-clean_bill.html"
+        }
+      ],
+      "failure": null
+    },
+    {
+      "caseId": "p1-expired",
+      "policyId": "housing-loan",
+      "asOf": "2026-11-01",
+      "expectedDecision": "request_info",
+      "decision": "request_info",
+      "expectedCodes": [
+        "document_expired"
+      ],
+      "codes": [
+        "document_expired"
+      ],
+      "decisionPass": true,
+      "codesPass": true,
+      "plannedCalls": 6,
+      "liveCalls": 2,
+      "cachedCalls": 4,
+      "docs": [
+        {
+          "doc": "p1-expired/id.png",
+          "truthType": "national_id",
+          "predictedType": "national_id",
+          "classPass": true,
+          "extractionCached": false,
+          "fields": [
+            {
+              "field": "full_name",
+              "truthFound": true,
+              "modelFound": true,
+              "truth": "Elin Thornquist",
+              "model": "ELIN THORNQUIST",
+              "modelBox": [
+                331,
+                270,
+                564,
+                306
+              ],
+              "truthBox": [
+                332,
+                260,
+                555,
+                314
+              ],
+              "diagnostics": null,
+              "valuePass": true,
+              "isoFormat": null,
+              "iou": 0.6473149492017417,
+              "centreInside": true,
+              "boxPass": true,
+              "pass": true
+            },
+            {
+              "field": "date_of_birth",
+              "truthFound": true,
+              "modelFound": true,
+              "truth": "1988-06-14",
+              "model": "1988-06-14",
+              "modelBox": [
+                331,
+                388,
+                478,
+                424
+              ],
+              "truthBox": [
+                332,
+                378,
+                474,
+                433
+              ],
+              "diagnostics": null,
+              "valuePass": true,
+              "isoFormat": true,
+              "iou": 0.6397997496871088,
+              "centreInside": true,
+              "boxPass": true,
+              "pass": true
+            },
+            {
+              "field": "document_number",
+              "truthFound": true,
+              "modelFound": true,
+              "truth": "VD4K7Q2M9T",
+              "model": "VD4K7Q2M9T",
+              "modelBox": [
+                660,
+                384,
+                808,
+                422
+              ],
+              "truthBox": [
+                660,
+                378,
+                808,
+                426
+              ],
+              "diagnostics": null,
+              "valuePass": true,
+              "isoFormat": null,
+              "iou": 0.7916666666666666,
+              "centreInside": true,
+              "boxPass": true,
+              "pass": true
+            },
+            {
+              "field": "issue_date",
+              "truthFound": true,
+              "modelFound": true,
+              "truth": "2016-08-19",
+              "model": "2016-08-19",
+              "modelBox": [
+                331,
+                509,
+                477,
+                545
+              ],
+              "truthBox": [
+                332,
+                497,
+                478,
+                551
+              ],
+              "diagnostics": null,
+              "valuePass": true,
+              "isoFormat": true,
+              "iou": 0.6590909090909091,
+              "centreInside": true,
+              "boxPass": true,
+              "pass": true
+            },
+            {
+              "field": "expiry_date",
+              "truthFound": true,
+              "modelFound": true,
+              "truth": "2026-08-18",
+              "model": "2026-08-18",
+              "modelBox": [
+                659,
+                509,
+                809,
+                545
+              ],
+              "truthBox": [
+                660,
+                497,
+                810,
+                551
+              ],
+              "diagnostics": null,
+              "valuePass": true,
+              "isoFormat": true,
+              "iou": 0.6592920353982301,
+              "centreInside": true,
+              "boxPass": true,
+              "pass": true
+            },
+            {
+              "field": "address",
+              "truthFound": true,
+              "modelFound": true,
+              "truth": "14 Quillfeather Row, Ambermoor 20417",
+              "model": "14 Quillfeather Row, Ambermoor 20417",
+              "modelBox": [
+                332,
+                629,
+                790,
+                668
+              ],
+              "truthBox": [
+                332,
+                615,
+                789,
+                670
+              ],
+              "diagnostics": null,
+              "valuePass": true,
+              "isoFormat": null,
+              "iou": 0.70799237308334,
+              "centreInside": true,
+              "boxPass": true,
+              "pass": true
+            }
+          ],
+          "overlay": "overlays/p1-expired_id.html"
+        },
+        {
+          "doc": "p1-expired/bill.png",
+          "truthType": "utility_bill",
+          "predictedType": "utility_bill",
+          "classPass": true,
+          "extractionCached": false,
+          "fields": [
+            {
+              "field": "full_name",
+              "truthFound": true,
+              "modelFound": true,
+              "truth": "Elin Thornquist",
+              "model": "Elin Thornquist",
+              "modelBox": [
+                63,
+                208,
+                228,
+                229
+              ],
+              "truthBox": [
+                64,
+                161,
+                230,
+                185
+              ],
+              "diagnostics": {
+                "dxPct": -0.15,
+                "dyPct": 4.55,
+                "widthRatio": 0.9939759036144579,
+                "heightRatio": 0.875
+              },
+              "valuePass": true,
+              "isoFormat": null,
+              "iou": 0,
+              "centreInside": false,
+              "boxPass": false,
+              "pass": false
+            },
+            {
+              "field": "date_of_birth",
+              "truthFound": false,
+              "modelFound": false,
+              "truth": "",
+              "model": "",
+              "modelBox": null,
+              "truthBox": null,
+              "diagnostics": null,
+              "valuePass": true,
+              "isoFormat": null,
+              "iou": null,
+              "centreInside": null,
+              "boxPass": null,
+              "pass": true
+            },
+            {
+              "field": "document_number",
+              "truthFound": true,
+              "modelFound": true,
+              "truth": "QW-10267-34459",
+              "model": "QW-10267-34459",
+              "modelBox": [
+                732,
+                181,
+                912,
+                196
+              ],
+              "truthBox": [
+                755,
+                159,
+                910,
+                178
+              ],
+              "diagnostics": {
+                "dxPct": -1.05,
+                "dyPct": 2,
+                "widthRatio": 1.1612903225806452,
+                "heightRatio": 0.7894736842105263
+              },
+              "valuePass": true,
+              "isoFormat": null,
+              "iou": 0,
+              "centreInside": false,
+              "boxPass": false,
+              "pass": false
+            },
+            {
+              "field": "issue_date",
+              "truthFound": true,
+              "modelFound": true,
+              "truth": "2026-10-22",
+              "model": "2026-10-22",
+              "modelBox": [
+                741,
+                209,
+                912,
+                226
+              ],
+              "truthBox": [
+                763,
+                187,
+                910,
+                206
+              ],
+              "diagnostics": {
+                "dxPct": -1,
+                "dyPct": 2.1,
+                "widthRatio": 1.163265306122449,
+                "heightRatio": 0.8947368421052632
+              },
+              "valuePass": true,
+              "isoFormat": true,
+              "iou": 0,
+              "centreInside": false,
+              "boxPass": false,
+              "pass": false
+            },
+            {
+              "field": "expiry_date",
+              "truthFound": false,
+              "modelFound": false,
+              "truth": "",
+              "model": "",
+              "modelBox": null,
+              "truthBox": null,
+              "diagnostics": null,
+              "valuePass": true,
+              "isoFormat": null,
+              "iou": null,
+              "centreInside": null,
+              "boxPass": null,
+              "pass": true
+            },
+            {
+              "field": "address",
+              "truthFound": true,
+              "modelFound": true,
+              "truth": "14 Quillfeather Row, Ambermoor 20417",
+              "model": "14 Quillfeather Row, Ambermoor 20417",
+              "modelBox": [
+                63,
+                233,
+                410,
+                280
+              ],
+              "truthBox": [
+                64,
+                187,
+                416,
+                237
+              ],
+              "diagnostics": {
+                "dxPct": -0.35,
+                "dyPct": 4.45,
+                "widthRatio": 0.9857954545454546,
+                "heightRatio": 0.94
+              },
+              "valuePass": true,
+              "isoFormat": null,
+              "iou": 0.04255188316679477,
+              "centreInside": false,
+              "boxPass": false,
+              "pass": false
+            }
+          ],
+          "overlay": "overlays/p1-expired_bill.html"
+        }
+      ],
+      "failure": null
+    },
+    {
+      "caseId": "p2-name-mismatch",
+      "policyId": "housing-loan",
+      "asOf": "2026-11-01",
+      "expectedDecision": "manual_review",
+      "decision": "manual_review",
+      "expectedCodes": [
+        "full_name_mismatch"
+      ],
+      "codes": [
+        "full_name_mismatch"
+      ],
+      "decisionPass": true,
+      "codesPass": true,
+      "plannedCalls": 6,
+      "liveCalls": 2,
+      "cachedCalls": 4,
+      "docs": [
+        {
+          "doc": "p2-name-mismatch/id.png",
+          "truthType": "national_id",
+          "predictedType": "national_id",
+          "classPass": true,
+          "extractionCached": false,
+          "fields": [
+            {
+              "field": "full_name",
+              "truthFound": true,
+              "modelFound": true,
+              "truth": "Tobias Wrenfield",
+              "model": "TOBIAS WRENFIELD",
+              "modelBox": [
+                331,
+                272,
+                568,
+                305
+              ],
+              "truthBox": [
+                332,
+                260,
+                566,
+                314
+              ],
+              "diagnostics": null,
+              "valuePass": true,
+              "isoFormat": null,
+              "iou": 0.6063604240282685,
+              "centreInside": true,
+              "boxPass": true,
+              "pass": true
+            },
+            {
+              "field": "date_of_birth",
+              "truthFound": true,
+              "modelFound": true,
+              "truth": "1979-11-02",
+              "model": "1979-11-02",
+              "modelBox": [
+                331,
+                390,
+                493,
+                425
+              ],
+              "truthBox": [
+                332,
+                378,
+                485,
+                433
+              ],
+              "diagnostics": null,
+              "valuePass": true,
+              "isoFormat": true,
+              "iou": 0.6134020618556701,
+              "centreInside": true,
+              "boxPass": true,
+              "pass": true
+            },
+            {
+              "field": "document_number",
+              "truthFound": true,
+              "modelFound": true,
+              "truth": "VD8R3N6W1H",
+              "model": "VD8R3N6W1H",
+              "modelBox": [
+                659,
+                384,
+                794,
+                418
+              ],
+              "truthBox": [
+                660,
+                378,
+                808,
+                426
+              ],
+              "diagnostics": null,
+              "valuePass": true,
+              "isoFormat": null,
+              "iou": 0.6382740263379098,
+              "centreInside": true,
+              "boxPass": true,
+              "pass": true
+            },
+            {
+              "field": "issue_date",
+              "truthFound": true,
+              "modelFound": true,
+              "truth": "2022-09-01",
+              "model": "2022-09-01",
+              "modelBox": [
+                332,
+                508,
+                475,
+                543
+              ],
+              "truthBox": [
+                332,
+                497,
+                472,
+                551
+              ],
+              "diagnostics": null,
+              "valuePass": true,
+              "isoFormat": true,
+              "iou": 0.639269406392694,
+              "centreInside": true,
+              "boxPass": true,
+              "pass": true
+            },
+            {
+              "field": "expiry_date",
+              "truthFound": true,
+              "modelFound": true,
+              "truth": "2032-08-31",
+              "model": "2032-08-31",
+              "modelBox": [
+                659,
+                509,
+                800,
+                545
+              ],
+              "truthBox": [
+                660,
+                497,
+                810,
+                551
+              ],
+              "diagnostics": null,
+              "valuePass": true,
+              "isoFormat": true,
+              "iou": 0.6194690265486725,
+              "centreInside": true,
+              "boxPass": true,
+              "pass": true
+            },
+            {
+              "field": "address",
+              "truthFound": true,
+              "modelFound": true,
+              "truth": "7 Brindlewick Lane, Hollowmere 31862",
+              "model": "7 Brindlewick Lane, Hollowmere 31862",
+              "modelBox": [
+                333,
+                627,
+                779,
+                663
+              ],
+              "truthBox": [
+                332,
+                615,
+                780,
+                670
+              ],
+              "diagnostics": null,
+              "valuePass": true,
+              "isoFormat": null,
+              "iou": 0.6516233766233767,
+              "centreInside": true,
+              "boxPass": true,
+              "pass": true
+            }
+          ],
+          "overlay": "overlays/p2-name-mismatch_id.html"
+        },
+        {
+          "doc": "p2-name-mismatch/bill.png",
+          "truthType": "utility_bill",
+          "predictedType": "utility_bill",
+          "classPass": true,
+          "extractionCached": false,
+          "fields": [
+            {
+              "field": "full_name",
+              "truthFound": true,
+              "modelFound": true,
+              "truth": "Brannoch Wrenfield",
+              "model": "Brannoch Wrenfield",
+              "modelBox": [
+                63,
+                166,
+                294,
+                184
+              ],
+              "truthBox": [
+                64,
+                161,
+                284,
+                185
+              ],
+              "diagnostics": null,
+              "valuePass": true,
+              "isoFormat": null,
+              "iou": 0.7228915662650602,
+              "centreInside": true,
+              "boxPass": true,
+              "pass": true
+            },
+            {
+              "field": "date_of_birth",
+              "truthFound": false,
+              "modelFound": false,
+              "truth": "",
+              "model": "",
+              "modelBox": null,
+              "truthBox": null,
+              "diagnostics": null,
+              "valuePass": true,
+              "isoFormat": null,
+              "iou": null,
+              "centreInside": null,
+              "boxPass": null,
+              "pass": true
+            },
+            {
+              "field": "document_number",
+              "truthFound": true,
+              "modelFound": true,
+              "truth": "QW-55733-56655",
+              "model": "QW-55733-56655",
+              "modelBox": [
+                754,
+                163,
+                910,
+                178
+              ],
+              "truthBox": [
+                753,
+                159,
+                910,
+                178
+              ],
+              "diagnostics": null,
+              "valuePass": true,
+              "isoFormat": null,
+              "iou": 0.7844451894066377,
+              "centreInside": true,
+              "boxPass": true,
+              "pass": true
+            },
+            {
+              "field": "issue_date",
+              "truthFound": true,
+              "modelFound": true,
+              "truth": "2026-10-14",
+              "model": "2026-10-14",
+              "modelBox": [
+                768,
+                191,
+                911,
+                207
+              ],
+              "truthBox": [
+                765,
+                187,
+                910,
+                206
+              ],
+              "diagnostics": null,
+              "valuePass": true,
+              "isoFormat": true,
+              "iou": 0.7312049433573635,
+              "centreInside": true,
+              "boxPass": true,
+              "pass": true
+            },
+            {
+              "field": "expiry_date",
+              "truthFound": false,
+              "modelFound": false,
+              "truth": "",
+              "model": "",
+              "modelBox": null,
+              "truthBox": null,
+              "diagnostics": null,
+              "valuePass": true,
+              "isoFormat": null,
+              "iou": null,
+              "centreInside": null,
+              "boxPass": null,
+              "pass": true
+            },
+            {
+              "field": "address",
+              "truthFound": true,
+              "modelFound": true,
+              "truth": "7 Brindlewick Lane, Hollowmere 31862",
+              "model": "7 Brindlewick Lane, Hollowmere 31862",
+              "modelBox": [
+                64,
+                189,
+                477,
+                209
+              ],
+              "truthBox": [
+                64,
+                187,
+                475,
+                211
+              ],
+              "diagnostics": null,
+              "valuePass": true,
+              "isoFormat": null,
+              "iou": 0.8299676898222941,
+              "centreInside": true,
+              "boxPass": true,
+              "pass": true
+            }
+          ],
+          "overlay": "overlays/p2-name-mismatch_bill.html"
+        }
+      ],
+      "failure": null
+    },
+    {
+      "caseId": "p1-address-mismatch",
+      "policyId": "housing-loan",
+      "asOf": "2026-11-01",
+      "expectedDecision": "manual_review",
+      "decision": "manual_review",
+      "expectedCodes": [
+        "address_mismatch"
+      ],
+      "codes": [
+        "address_mismatch"
+      ],
+      "decisionPass": true,
+      "codesPass": true,
+      "plannedCalls": 6,
+      "liveCalls": 2,
+      "cachedCalls": 4,
+      "docs": [
+        {
+          "doc": "p1-address-mismatch/id.png",
+          "truthType": "national_id",
+          "predictedType": "national_id",
+          "classPass": true,
+          "extractionCached": false,
+          "fields": [
+            {
+              "field": "full_name",
+              "truthFound": true,
+              "modelFound": true,
+              "truth": "Elin Thornquist",
+              "model": "ELIN THORNQUIST",
+              "modelBox": [
+                319,
+                271,
+                564,
+                306
+              ],
+              "truthBox": [
+                332,
+                260,
+                555,
+                314
+              ],
+              "diagnostics": null,
+              "valuePass": true,
+              "isoFormat": null,
+              "iou": 0.6091945051514206,
+              "centreInside": true,
+              "boxPass": true,
+              "pass": true
+            },
+            {
+              "field": "date_of_birth",
+              "truthFound": true,
+              "modelFound": true,
+              "truth": "1988-06-14",
+              "model": "1988-06-14",
+              "modelBox": [
+                319,
+                391,
+                468,
+                423
+              ],
+              "truthBox": [
+                332,
+                378,
+                474,
+                433
+              ],
+              "diagnostics": null,
+              "valuePass": true,
+              "isoFormat": true,
+              "iou": 0.5290542183321176,
+              "centreInside": true,
+              "boxPass": true,
+              "pass": true
+            },
+            {
+              "field": "document_number",
+              "truthFound": true,
+              "modelFound": true,
+              "truth": "VD4K7Q2M9T",
+              "model": "VD4K7Q2M9T",
+              "modelBox": [
+                652,
+                385,
+                806,
+                420
+              ],
+              "truthBox": [
+                660,
+                378,
+                808,
+                426
+              ],
+              "diagnostics": null,
+              "valuePass": true,
+              "isoFormat": null,
+              "iou": 0.6920368364030336,
+              "centreInside": true,
+              "boxPass": true,
+              "pass": true
+            },
+            {
+              "field": "issue_date",
+              "truthFound": true,
+              "modelFound": true,
+              "truth": "2021-05-10",
+              "model": "2021-05-10",
+              "modelBox": [
+                319,
+                509,
+                476,
+                544
+              ],
+              "truthBox": [
+                332,
+                497,
+                479,
+                551
+              ],
+              "diagnostics": null,
+              "valuePass": true,
+              "isoFormat": true,
+              "iou": 0.6005004170141784,
+              "centreInside": true,
+              "boxPass": true,
+              "pass": true
+            },
+            {
+              "field": "expiry_date",
+              "truthFound": true,
+              "modelFound": true,
+              "truth": "2031-05-09",
+              "model": "2031-05-09",
+              "modelBox": [
+                652,
+                510,
+                810,
+                545
+              ],
+              "truthBox": [
+                660,
+                497,
+                811,
+                551
+              ],
+              "diagnostics": null,
+              "valuePass": true,
+              "isoFormat": true,
+              "iou": 0.622480436329144,
+              "centreInside": true,
+              "boxPass": true,
+              "pass": true
+            },
+            {
+              "field": "address",
+              "truthFound": true,
+              "modelFound": true,
+              "truth": "14 Quillfeather Row, Ambermoor 20417",
+              "model": "14 Quillfeather Row, Ambermoor 20417",
+              "modelBox": [
+                319,
+                628,
+                788,
+                664
+              ],
+              "truthBox": [
+                332,
+                615,
+                789,
+                670
+              ],
+              "diagnostics": null,
+              "valuePass": true,
+              "isoFormat": null,
+              "iou": 0.6411748623208218,
+              "centreInside": true,
+              "boxPass": true,
+              "pass": true
+            }
+          ],
+          "overlay": "overlays/p1-address-mismatch_id.html"
+        },
+        {
+          "doc": "p1-address-mismatch/bill.png",
+          "truthType": "utility_bill",
+          "predictedType": "utility_bill",
+          "classPass": true,
+          "extractionCached": false,
+          "fields": [
+            {
+              "field": "full_name",
+              "truthFound": true,
+              "modelFound": true,
+              "truth": "Elin Thornquist",
+              "model": "Elin Thornquist",
+              "modelBox": [
+                62,
+                166,
+                233,
+                182
+              ],
+              "truthBox": [
+                64,
+                161,
+                230,
+                185
+              ],
+              "diagnostics": null,
+              "valuePass": true,
+              "isoFormat": null,
+              "iou": 0.6535433070866141,
+              "centreInside": true,
+              "boxPass": true,
+              "pass": true
+            },
+            {
+              "field": "date_of_birth",
+              "truthFound": false,
+              "modelFound": false,
+              "truth": "",
+              "model": "",
+              "modelBox": null,
+              "truthBox": null,
+              "diagnostics": null,
+              "valuePass": true,
+              "isoFormat": null,
+              "iou": null,
+              "centreInside": null,
+              "boxPass": null,
+              "pass": true
+            },
+            {
+              "field": "document_number",
+              "truthFound": true,
+              "modelFound": true,
+              "truth": "QW-76629-60842",
+              "model": "QW-76629-60842",
+              "modelBox": [
+                751,
+                167,
+                913,
+                182
+              ],
+              "truthBox": [
+                753,
+                159,
+                910,
+                178
+              ],
+              "diagnostics": null,
+              "valuePass": true,
+              "isoFormat": null,
+              "iou": 0.46852957135105805,
+              "centreInside": true,
+              "boxPass": true,
+              "pass": true
+            },
+            {
+              "field": "issue_date",
+              "truthFound": true,
+              "modelFound": true,
+              "truth": "2026-10-01",
+              "model": "2026-10-01",
+              "modelBox": [
+                778,
+                193,
+                912,
+                206
+              ],
+              "truthBox": [
+                776,
+                187,
+                910,
+                206
+              ],
+              "diagnostics": null,
+              "valuePass": true,
+              "isoFormat": true,
+              "iou": 0.6671850699844479,
+              "centreInside": true,
+              "boxPass": true,
+              "pass": true
+            },
+            {
+              "field": "expiry_date",
+              "truthFound": false,
+              "modelFound": false,
+              "truth": "",
+              "model": "",
+              "modelBox": null,
+              "truthBox": null,
+              "diagnostics": null,
+              "valuePass": true,
+              "isoFormat": null,
+              "iou": null,
+              "centreInside": null,
+              "boxPass": null,
+              "pass": true
+            },
+            {
+              "field": "address",
+              "truthFound": true,
+              "modelFound": true,
+              "truth": "58 Mistlethorn Road, Ambermoor 20433",
+              "model": "58 Mistlethorn Road, Ambermoor 20433",
+              "modelBox": [
+                62,
+                195,
+                428,
+                239
+              ],
+              "truthBox": [
+                64,
+                187,
+                423,
+                237
+              ],
+              "diagnostics": null,
+              "valuePass": true,
+              "isoFormat": null,
+              "iou": 0.7945826306913997,
+              "centreInside": true,
+              "boxPass": true,
+              "pass": true
+            }
+          ],
+          "overlay": "overlays/p1-address-mismatch_bill.html"
+        }
+      ],
+      "failure": null
+    },
+    {
+      "caseId": "p2-blurry",
+      "policyId": "housing-loan",
+      "asOf": "2026-11-01",
+      "expectedDecision": "request_info",
+      "decision": "request_info",
+      "expectedCodes": [
+        "quality_failed"
+      ],
+      "codes": [
+        "quality_failed"
+      ],
+      "decisionPass": true,
+      "codesPass": true,
+      "plannedCalls": 2,
+      "liveCalls": 0,
+      "cachedCalls": 2,
+      "docs": [
+        {
+          "doc": "p2-blurry/id.png",
+          "truthType": "national_id",
+          "predictedType": null,
+          "classPass": null,
+          "extractionCached": null,
+          "fields": []
+        },
+        {
+          "doc": "p2-blurry/bill.png",
+          "truthType": "utility_bill",
+          "predictedType": null,
+          "classPass": null,
+          "extractionCached": null,
+          "fields": []
+        }
+      ],
+      "failure": null
+    }
+  ]
+}
